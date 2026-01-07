@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>춘천남부 공개강연 관리</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="./script.js" defer></script>
+</head>
+<body>
+  <header class="top-bar">
+    <h1 class="app-title">춘천남부 공개강연 계획표</h1>
+    <div class="auth-area">
+      <div id="auth-status" class="auth-status">로그인되지 않음</div>
+      <div id="gsi-button-container"></div>
+      <button id="logout-button" class="button button-secondary" style="display:none">로그아웃</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="section">
+      <h2 class="section-title">공개 강연 목록</h2>
+      <p class="section-description">
+        Google 계정으로 로그인하면 공개된 강연 정보가 표시됩니다.
+      </p>
+      <div id="public-loading" class="info-text">데이터를 불러오려면 로그인해주세요.</div>
+      <div class="table-wrapper">
+        <table id="public-table" class="data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="admin-section" class="section" style="display:none">
+      <h2 class="section-title">관리자 전용 관리 화면</h2>
+      <p class="section-description">
+        권한 시트에 등록된 계정만 데이터 추가·수정이 가능합니다.
+      </p>
+
+      <div class="card">
+        <h3 class="card-title">강연 정보 입력 / 수정</h3>
+        <form id="plan-form" class="plan-form">
+          <input type="hidden" id="edit-row-number">
+          <div class="form-grid" id="plan-form-fields">
+          </div>
+          <div class="form-actions">
+            <button type="submit" id="save-button" class="button button-primary">새 행 추가</button>
+            <button type="button" id="cancel-edit-button" class="button button-secondary" style="display:none">수정 취소</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">전체 계획표</h3>
+        <div id="admin-loading" class="info-text">계획표 데이터를 불러오는 중...</div>
+        <div class="table-wrapper">
+          <table id="admin-table" class="data-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+
