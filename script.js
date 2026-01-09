@@ -536,7 +536,8 @@ async function loadPlanData(forAdmin) {
       } else if (accessToken) {
         values = await fetchSheetValues(range);
       } else {
-        throw new Error("공개 조회용 설정이 필요합니다.");
+        setLoadingText("public-loading", "공개 조회 설정이 필요합니다. 관리자에게 문의하세요.");
+        return;
       }
     }
     if (!values.length) {
