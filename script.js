@@ -4,14 +4,30 @@ const PLAN_SHEET_NAME = "계획표";
 const PERMISSION_SHEET_NAME = "권한";
 const PLAN_HEADER_ROW = 4;
 const PLAN_DATA_START_ROW = 5;
+const API_KEY = "";
+const PUBLIC_LAST_COLUMN_INDEX = 7;
+const OUTLINE_SHEET_NAME = "강연제목";
+const COL_DATE = 0;
+const COL_OUTLINE_NO = 1;
+const COL_TOPIC = 2;
+const COL_SPEAKER = 3;
+const COL_CONGREGATION = 4;
+const COL_SPEAKER_CONTACT = 5;
+const COL_INVITER = 6;
+const COL_HOST = 7;
+const COL_READER = 8;
+const COL_PRAYER = 9;
 
 let accessToken = null;
 let googleUserEmail = null;
 let isAdmin = false;
+let isSuperAdmin = false;
 let planHeader = [];
 let planRows = [];
 let publicVisibleColumnIndexes = [];
 let publicVisiblePublishColumnIndex = null;
+let outlineCache = {};
+const SIX_MONTH_DAYS = 180;
 
 let tokenClient = null;
 
@@ -63,6 +79,22 @@ async function fetchSheetValues(range) {
   return data.values || [];
 }
 
+async function fetchSheetValuesPublic(range) {
+  if (!API_KEY) {
+    throw new Error("공개 조회용 API 키가 설정되지 않았습니다.");
+  }
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
+    range
+  )}?key=${API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`공개 시트 조회 실패: ${res.status} ${msg}`);
+  }
+  const data = await res.json();
+  return data.values || [];
+}
+
 async function appendSheetValues(range, values) {
   if (!accessToken) {
     throw new Error("액세스 토큰이 없습니다. 먼저 로그인하세요.");
@@ -85,6 +117,50 @@ async function appendSheetValues(range, values) {
     throw new Error(`시트 추가 실패: ${res.status} ${msg}`);
   }
   return res.json();
+}
+
+async function loadOutlineCache() {
+  const range = `${OUTLINE_SHEET_NAME}!A2:B`;
+  let values;
+  if (API_KEY) {
+    values = await fetchSheetValuesPublic(range);
+  } else if (accessToken) {
+    values = await fetchSheetValues(range);
+  } else {
+    throw new Error("골자 조회 설정이 필요합니다.");
+  }
+  const result = {};
+  values.forEach((row) => {
+    const no = (row[0] || "").toString().trim();
+    const topic = (row[1] || "").toString().trim();
+    if (no) {
+      result[no] = topic;
+    }
+  });
+  outlineCache = result;
+}
+
+async function getOutlineTopic(no) {
+  const trimmed = (no || "").toString().trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (!outlineCache || Object.keys(outlineCache).length === 0) {
+    await loadOutlineCache();
+  }
+  return outlineCache[trimmed] || "";
+}
+
+function parseDateString(value) {
+  const str = (value || "").toString().trim();
+  if (!str) {
+    return null;
+  }
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return d;
 }
 
 async function updateSheetRow(rowNumber, values) {
@@ -124,12 +200,9 @@ function detectPublicColumns() {
       publicVisiblePublishColumnIndex = index;
     }
   });
-  const candidates = [0, 1, 2, 3, 4];
-  candidates.forEach((idx) => {
-    if (idx < planHeader.length) {
-      publicVisibleColumnIndexes.push(idx);
-    }
-  });
+  for (let idx = 0; idx <= PUBLIC_LAST_COLUMN_INDEX && idx < planHeader.length; idx += 1) {
+    publicVisibleColumnIndexes.push(idx);
+  }
 }
 
 function renderPublicTable() {
@@ -249,7 +322,7 @@ function buildAdminFormFields() {
 
     const input = document.createElement("input");
     input.className = "form-input";
-    input.type = "text";
+    input.type = index === COL_DATE ? "date" : "text";
     input.id = `col-${index}`;
     input.name = `col-${index}`;
 
@@ -297,12 +370,138 @@ function startEditRow(rowIndex) {
   cancelButton.style.display = "inline-block";
 }
 
+function initAdminFieldBehaviors() {
+  if (!isAdmin) {
+    return;
+  }
+  const dateInput = document.getElementById(`col-${COL_DATE}`);
+  const outlineInput = document.getElementById(`col-${COL_OUTLINE_NO}`);
+  const topicInput = document.getElementById(`col-${COL_TOPIC}`);
+  const dateField = dateInput ? dateInput.parentElement : null;
+  const outlineField = outlineInput ? outlineInput.parentElement : null;
+  const dateWarningId = "date-duplicate-warning";
+  const outlineWarningId = "outline-warning";
+  if (dateField && !document.getElementById(dateWarningId)) {
+    const warn = document.createElement("div");
+    warn.id = dateWarningId;
+    warn.className = "info-text error-text";
+    dateField.appendChild(warn);
+  }
+  if (outlineField && !document.getElementById(outlineWarningId)) {
+    const warn = document.createElement("div");
+    warn.id = outlineWarningId;
+    warn.className = "info-text error-text";
+    outlineField.appendChild(warn);
+  }
+  if (dateInput) {
+    dateInput.addEventListener("change", () => {
+      const selected = (dateInput.value || "").toString().trim();
+      const editRowEl = document.getElementById("edit-row-number");
+      const rowNumberValue = editRowEl.value;
+      let currentSheetRow = null;
+      if (rowNumberValue) {
+        currentSheetRow = parseInt(rowNumberValue, 10);
+      }
+      const duplicated = planRows.some((row, index) => {
+        const sheetRow = PLAN_DATA_START_ROW + index;
+        if (currentSheetRow && sheetRow === currentSheetRow) {
+          return false;
+        }
+        const value = (row[COL_DATE] || "").toString().trim();
+        return selected && value === selected;
+      });
+      const warn = document.getElementById(dateWarningId);
+      if (warn) {
+        warn.textContent = duplicated ? "이미 등록된 날짜입니다." : "";
+      }
+    });
+  }
+  if (outlineInput && topicInput) {
+    outlineInput.addEventListener("change", async () => {
+      const value = (outlineInput.value || "").toString().trim();
+      const editRowEl = document.getElementById("edit-row-number");
+      const rowNumberValue = editRowEl.value;
+      let currentSheetRow = null;
+      if (rowNumberValue) {
+        currentSheetRow = parseInt(rowNumberValue, 10);
+      }
+      const duplicatedDates = [];
+      planRows.forEach((row, index) => {
+        const sheetRow = PLAN_DATA_START_ROW + index;
+        if (currentSheetRow && sheetRow === currentSheetRow) {
+          return;
+        }
+        const existing = (row[COL_OUTLINE_NO] || "").toString().trim();
+        if (value && existing === value) {
+          const dateStr = (row[COL_DATE] || "").toString().trim();
+          if (dateStr) {
+            duplicatedDates.push(dateStr);
+          } else {
+            duplicatedDates.push("날짜 미입력");
+          }
+        }
+      });
+      const warn = document.getElementById(outlineWarningId);
+      if (warn) {
+        if (duplicatedDates.length > 0) {
+          warn.textContent = `이미 사용 중인 골자 번호입니다. 사용된 날짜: ${duplicatedDates.join(
+            ", "
+          )}`;
+        } else {
+          warn.textContent = "";
+        }
+      }
+      if (!value) {
+        return;
+      }
+      try {
+        const topic = await getOutlineTopic(value);
+        if (topic) {
+          topicInput.value = topic;
+        }
+      } catch (error) {
+        if (warn) {
+          warn.textContent = "골자 주제를 불러오는 중 오류가 발생했습니다.";
+        }
+      }
+    });
+  }
+  const hostInput = document.getElementById(`col-${COL_HOST}`);
+  const readerInput = document.getElementById(`col-${COL_READER}`);
+  const prayerInput = document.getElementById(`col-${COL_PRAYER}`);
+  if (!isSuperAdmin) {
+    [hostInput, readerInput, prayerInput].forEach((input) => {
+      if (input) {
+        input.readOnly = true;
+        input.classList.add("form-input-readonly");
+      }
+    });
+  } else {
+    [hostInput, readerInput, prayerInput].forEach((input) => {
+      if (input) {
+        input.readOnly = false;
+        input.classList.remove("form-input-readonly");
+      }
+    });
+  }
+}
+
 async function loadPermissionAndDecideRole() {
   try {
-    const values = await fetchSheetValues(`${PERMISSION_SHEET_NAME}!A2:A`);
-    const emails = values.map((row) => (row[0] || "").toString().trim()).filter(Boolean);
-    isAdmin = !!googleUserEmail && emails.includes(googleUserEmail);
-    if (isAdmin) {
+    const values = await fetchSheetValues(`${PERMISSION_SHEET_NAME}!A2:B`);
+    const entries = values
+      .map((row) => ({
+        email: (row[0] || "").toString().trim(),
+        role: (row[1] || "").toString().trim().toLowerCase(),
+      }))
+      .filter((entry) => entry.email);
+    isSuperAdmin = !!googleUserEmail && entries.some(
+      (entry) => entry.email === googleUserEmail && entry.role === "superadmin"
+    );
+    isAdmin = !!googleUserEmail && entries.some((entry) => entry.email === googleUserEmail);
+    if (isSuperAdmin) {
+      setAuthStatus(`${googleUserEmail} (최고관리자)`, false);
+    } else if (isAdmin) {
       setAuthStatus(`${googleUserEmail} (관리자)`, false);
     } else {
       setAuthStatus(
@@ -314,20 +513,32 @@ async function loadPermissionAndDecideRole() {
     }
     document.getElementById("logout-button").style.display = "inline-block";
     setAdminSectionVisible(isAdmin);
-    await loadPlanData();
+    await loadPlanData(true);
   } catch (error) {
     console.error(error);
     setAuthStatus(`권한 확인 중 오류: ${error.message}`, true);
   }
 }
 
-async function loadPlanData() {
+async function loadPlanData(forAdmin) {
   try {
     setLoadingText("public-loading", "계획표를 불러오는 중입니다...");
-    if (isAdmin) {
+    if (forAdmin && isAdmin) {
       setLoadingText("admin-loading", "계획표를 불러오는 중입니다...");
     }
-    const values = await fetchSheetValues(`${PLAN_SHEET_NAME}!A${PLAN_HEADER_ROW}:J`);
+    const range = `${PLAN_SHEET_NAME}!A${PLAN_HEADER_ROW}:J`;
+    let values;
+    if (forAdmin) {
+      values = await fetchSheetValues(range);
+    } else {
+      if (API_KEY) {
+        values = await fetchSheetValuesPublic(range);
+      } else if (accessToken) {
+        values = await fetchSheetValues(range);
+      } else {
+        throw new Error("공개 조회용 설정이 필요합니다.");
+      }
+    }
     if (!values.length) {
       planHeader = [];
       planRows = [];
@@ -340,14 +551,15 @@ async function loadPlanData() {
     planHeader = values[0];
     planRows = values.slice(1);
     renderPublicTable();
-    if (isAdmin) {
+    if (forAdmin && isAdmin) {
       buildAdminFormFields();
+      initAdminFieldBehaviors();
       renderAdminTable();
     }
   } catch (error) {
     console.error(error);
     setLoadingText("public-loading", `계획표 불러오기 오류: ${error.message}`);
-    if (isAdmin) {
+    if (forAdmin && isAdmin) {
       setLoadingText("admin-loading", `계획표 불러오기 오류: ${error.message}`);
     }
   }
@@ -432,7 +644,84 @@ function initFormHandling() {
     const values = getFormValues();
     const editRowEl = document.getElementById("edit-row-number");
     const rowNumberValue = editRowEl.value;
+    const dateValue = values[COL_DATE];
+    const outlineValue = values[COL_OUTLINE_NO];
+    const dateTrimmed = (dateValue || "").toString().trim();
+    const outlineTrimmed = (outlineValue || "").toString().trim();
+    if (!dateTrimmed) {
+      alert("날짜를 입력해주세요.");
+      return;
+    }
+    if (!outlineTrimmed) {
+      alert("골자 번호를 입력해주세요.");
+      return;
+    }
+    const newDate = parseDateString(dateTrimmed);
+    if (!newDate) {
+      alert("날짜 형식이 올바르지 않습니다.");
+      return;
+    }
+    const editRowEl = document.getElementById("edit-row-number");
+    const rowNumberValue = editRowEl.value;
+    let currentSheetRow = null;
+    if (rowNumberValue) {
+      currentSheetRow = parseInt(rowNumberValue, 10);
+    }
+    const allDuplicateDates = [];
+    const tooCloseDates = [];
+    planRows.forEach((row, index) => {
+      const sheetRow = PLAN_DATA_START_ROW + index;
+      if (currentSheetRow && sheetRow === currentSheetRow) {
+        return;
+      }
+      const existingOutline = (row[COL_OUTLINE_NO] || "").toString().trim();
+      if (!existingOutline || existingOutline !== outlineTrimmed) {
+        return;
+      }
+      const existingDateStr = (row[COL_DATE] || "").toString().trim();
+      allDuplicateDates.push(existingDateStr || "날짜 미입력");
+      const existingDate = parseDateString(existingDateStr);
+      if (!existingDate) {
+        return;
+      }
+      const diffMs = Math.abs(newDate.getTime() - existingDate.getTime());
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays < SIX_MONTH_DAYS) {
+        tooCloseDates.push(existingDateStr);
+      }
+    });
+    if (tooCloseDates.length > 0) {
+      alert(
+        `이 골자 번호는 다음 날짜에 이미 사용되었고 6개월 이내입니다: ${tooCloseDates.join(
+          ", "
+        )}\n\n다른 날짜를 선택해주세요.`
+      );
+      return;
+    }
+    if (allDuplicateDates.length > 0) {
+      const confirmMessage = `이 골자 번호는 이미 다음 날짜에 사용되었습니다: ${allDuplicateDates.join(
+        ", "
+      )}\n\n기존 일정과 6개월 이상 차이가 나므로, 동일한 골자를 다시 사용하시겠습니까?`;
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) {
+        return;
+      }
+    }
     try {
+      if (!isSuperAdmin) {
+        if (rowNumberValue) {
+          const rowNumber = parseInt(rowNumberValue, 10);
+          const rowIndex = rowNumber - PLAN_DATA_START_ROW;
+          const original = planRows[rowIndex] || [];
+          [COL_HOST, COL_READER, COL_PRAYER].forEach((idx) => {
+            values[idx] = original[idx] || "";
+          });
+        } else {
+          [COL_HOST, COL_READER, COL_PRAYER].forEach((idx) => {
+            values[idx] = "";
+          });
+        }
+      }
       if (rowNumberValue) {
         const rowNumber = parseInt(rowNumberValue, 10);
         await updateSheetRow(rowNumber, values);
@@ -441,7 +730,7 @@ function initFormHandling() {
         await appendSheetValues(`${PLAN_SHEET_NAME}!A${PLAN_DATA_START_ROW}:J`, [values]);
         alert("새 행이 추가되었습니다.");
       }
-      await loadPlanData();
+      await loadPlanData(true);
       clearForm();
     } catch (error) {
       console.error(error);
@@ -457,6 +746,7 @@ function initFormHandling() {
 window.addEventListener("DOMContentLoaded", () => {
   initLogout();
   initFormHandling();
+  loadPlanData(false);
   const checkInterval = setInterval(() => {
     if (window.google && window.google.accounts && window.google.accounts.id) {
       clearInterval(checkInterval);
@@ -469,4 +759,3 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }, 8000);
 });
-
