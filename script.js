@@ -2,6 +2,7 @@ const CLIENT_ID = "1092650999010-20kk4r7hdv52qdii34r5jhajnmth93sv.apps.googleuse
 const SPREADSHEET_ID = "165I0tYQpQoNwzTXNDlhAEbgXQHiHglAd_ugBck2HjvE";
 const PLAN_SHEET_NAME = "계획표";
 const PERMISSION_SHEET_NAME = "권한";
+const PUBLISHED_DOC_ID = "2PACX-1vRVouR0KSB1WliKFq5ubo_X_VrC8k4EIR6yo3-V9lzu5dU9kyVzoo-vJVgPFGvsLAaMkljvWmNRhORn";
 const PLAN_HEADER_ROW = 4;
 const PLAN_DATA_START_ROW = 5;
 const API_KEY = "";
@@ -90,9 +91,9 @@ async function fetchSheetValuesPublic(range) {
     }
     return parts[0];
   })();
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISHED_DOC_ID}/gviz/tq?sheet=${encodeURIComponent(
     PLAN_SHEET_NAME
-  )}&range=${encodeURIComponent(rangePart)}&headers=1`;
+  )}&range=${encodeURIComponent(rangePart)}&headers=1&tqx=out:json`;
   const res = await fetch(url);
   if (!res.ok) {
     const msg = await res.text();
