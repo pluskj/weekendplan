@@ -661,8 +661,6 @@ function initFormHandling() {
       alert("날짜 형식이 올바르지 않습니다.");
       return;
     }
-    const editRowEl = document.getElementById("edit-row-number");
-    const rowNumberValue = editRowEl.value;
     let currentSheetRow = null;
     if (rowNumberValue) {
       currentSheetRow = parseInt(rowNumberValue, 10);
