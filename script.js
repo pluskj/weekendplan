@@ -4,7 +4,7 @@ const PLAN_SHEET_NAME = "계획표";
 const PERMISSION_SHEET_NAME = "권한";
 const PLAN_HEADER_ROW = 4;
 const PLAN_DATA_START_ROW = 5;
-const API_KEY = "AQ.Ab8RN6ImO5fw6bX8yyxepTyK3bv7BiMNpOj312XZOH0bQ7ABLQ";
+const API_KEY = "";
 const PUBLIC_LAST_COLUMN_INDEX = 7;
 const OUTLINE_SHEET_NAME = "강연제목";
 const COL_DATE = 0;
@@ -80,19 +80,42 @@ async function fetchSheetValues(range) {
 }
 
 async function fetchSheetValuesPublic(range) {
-  if (!API_KEY) {
-    throw new Error("공개 조회용 API 키가 설정되지 않았습니다.");
-  }
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
-    range
-  )}?key=${API_KEY}`;
+  const rangePart = (() => {
+    if (!range) {
+      return `A${PLAN_HEADER_ROW}:J`;
+    }
+    const parts = range.split("!");
+    if (parts.length === 2) {
+      return parts[1];
+    }
+    return parts[0];
+  })();
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+    PLAN_SHEET_NAME
+  )}&range=${encodeURIComponent(rangePart)}&headers=1`;
   const res = await fetch(url);
   if (!res.ok) {
     const msg = await res.text();
     throw new Error(`공개 시트 조회 실패: ${res.status} ${msg}`);
   }
-  const data = await res.json();
-  return data.values || [];
+  const text = await res.text();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1) {
+    throw new Error("공개 시트 응답 형식이 올바르지 않습니다.");
+  }
+  const json = JSON.parse(text.slice(start, end + 1));
+  const table = json.table || {};
+  const rows = table.rows || [];
+  const values = rows.map((row) =>
+    (row.c || []).map((cell) => {
+      if (!cell || typeof cell.v === "undefined" || cell.v === null) {
+        return "";
+      }
+      return cell.v;
+    })
+  );
+  return values;
 }
 
 async function appendSheetValues(range, values) {
@@ -121,14 +144,10 @@ async function appendSheetValues(range, values) {
 
 async function loadOutlineCache() {
   const range = `${OUTLINE_SHEET_NAME}!A2:B`;
-  let values;
-  if (API_KEY) {
-    values = await fetchSheetValuesPublic(range);
-  } else if (accessToken) {
-    values = await fetchSheetValues(range);
-  } else {
-    throw new Error("골자 조회 설정이 필요합니다.");
+  if (!accessToken) {
+    throw new Error("골자 조회를 위해 먼저 관리자 로그인이 필요합니다.");
   }
+  const values = await fetchSheetValues(range);
   const result = {};
   values.forEach((row) => {
     const no = (row[0] || "").toString().trim();
