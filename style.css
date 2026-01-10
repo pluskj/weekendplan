@@ -13,10 +13,13 @@ body {
 }
 
 .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem;
+  padding: 0.6rem 1.25rem 0.5rem;
   background-color: #1c4587;
   color: #fff;
 }
@@ -24,6 +27,19 @@ body {
 .app-title {
   margin: 0;
   font-size: 1.1rem;
+  text-align: center;
+}
+
+.top-bar-row {
+  width: 100%;
+  max-width: 1080px;
+}
+
+.top-bar-row-sub {
+  margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .auth-area {
@@ -48,9 +64,8 @@ body {
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
+  display: flex;
+  flex-direction: column;
   padding: 0.9rem;
   flex: 1;
 }
@@ -69,37 +84,16 @@ body {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
-  padding: 0.9rem;
-}
-
-@media (min-width: 960px) {
-  .layout {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.1fr);
-    padding: 1.25rem;
-  }
-}
-
-.section {
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 0.9rem 0.95rem 1.1rem;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+.section-public {
+  flex: 1;
+  padding: 0;
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .section-title {
   margin: 0 0 0.25rem;
   font-size: 1.1rem;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.25rem;
 }
 
 .year-select {
@@ -108,6 +102,16 @@ body {
   border-radius: 4px;
   border: 1px solid #d1d5db;
   background-color: #fff;
+}
+
+.year-label {
+  margin-right: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.section-title-inline {
+  margin-left: 0.5rem;
+  font-size: 0.95rem;
 }
 
 .section-description {
@@ -124,9 +128,9 @@ body {
 
 .table-wrapper {
   overflow: auto;
-  max-height: 480px;
-  border-radius: 6px;
-  border: 1px solid #e1e4ea;
+  max-height: none;
+  border-radius: 0;
+  border: none;
 }
 
 .data-table {

@@ -10,20 +10,25 @@
 </head>
 <body>
   <header class="top-bar">
-    <h1 class="app-title">춘천남부 공개강연 계획표</h1>
-    <div class="auth-area">
-      <div id="auth-status" class="auth-status"></div>
-      <div id="gsi-button-container"></div>
-      <button id="logout-button" class="icon-button" style="display:none" title="로그아웃">⎋</button>
+    <div class="top-bar-row top-bar-row-main">
+      <h1 class="app-title">춘천남부 공개강연 계획표</h1>
+    </div>
+    <div class="top-bar-row top-bar-row-sub">
+      <div class="header-left">
+        <label for="year-filter" class="year-label">연도</label>
+        <select id="year-filter" class="year-select"></select>
+        <span class="section-title-inline">공개 강연 목록</span>
+      </div>
+      <div class="auth-area">
+        <div id="auth-status" class="auth-status"></div>
+        <div id="gsi-button-container"></div>
+        <button id="logout-button" class="icon-button" style="display:none" title="로그아웃">⎋</button>
+      </div>
     </div>
   </header>
 
   <main class="layout">
-    <section class="section">
-      <div class="section-header">
-        <select id="year-filter" class="year-select"></select>
-        <h2 class="section-title">공개 강연 목록</h2>
-      </div>
+    <section class="section section-public">
       <div id="public-loading" class="info-text">계획표를 불러오는 중입니다...</div>
       <div class="table-wrapper">
         <table id="public-table" class="data-table">
