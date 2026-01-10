@@ -649,21 +649,24 @@ function initAdminFieldBehaviors() {
 
 async function loadPermissionAndDecideRole() {
   try {
-    const values = await fetchSheetValues(`${PERMISSION_SHEET_NAME}!A2:B`);
+    const values = await fetchSheetValues(`${PERMISSION_SHEET_NAME}!A2:C`);
     const entries = values
       .map((row) => ({
-        email: (row[0] || "").toString().trim().toLowerCase(),
-        role: (row[1] || "").toString().trim().toLowerCase(),
+        roleLabel: (row[0] || "").toString().trim(),
+        email: (row[2] || "").toString().trim().toLowerCase(),
       }))
       .filter((entry) => entry.email);
     const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
     isSuperAdmin =
-      !!userEmail && entries.some((entry) => entry.email === userEmail && entry.role === "superadmin");
+      !!userEmail &&
+      entries.some((entry) => entry.email === userEmail && entry.roleLabel === "최고관리자");
     isAdmin = !!userEmail && entries.some((entry) => entry.email === userEmail);
     if (isSuperAdmin) {
       setAuthStatus(`${googleUserEmail} (최고관리자)`, false);
     } else if (isAdmin) {
-      setAuthStatus(`${googleUserEmail} (관리자)`, false);
+      const matched = entries.find((entry) => entry.email === userEmail);
+      const label = matched && matched.roleLabel ? matched.roleLabel : "관리자";
+      setAuthStatus(`${googleUserEmail} (${label})`, false);
     } else {
       setAuthStatus(
         googleUserEmail
