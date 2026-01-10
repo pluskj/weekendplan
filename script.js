@@ -93,7 +93,7 @@ async function fetchSheetValuesPublic(range) {
   })();
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
     PLAN_SHEET_NAME
-  )}&range=${encodeURIComponent(rangePart)}&headers=1&tqx=out:json`;
+  )}&range=${encodeURIComponent(rangePart)}&tqx=out:json`;
   const res = await fetch(url);
   if (!res.ok) {
     const msg = await res.text();
@@ -107,13 +107,6 @@ async function fetchSheetValuesPublic(range) {
   }
   const json = JSON.parse(text.slice(start, end + 1));
   const table = json.table || {};
-  const cols = table.cols || [];
-  const header = cols.map((col) => {
-    if (!col || typeof col.label === "undefined" || col.label === null) {
-      return "";
-    }
-    return col.label;
-  });
   const rows = table.rows || [];
   const values = rows.map((row) =>
     (row.c || []).map((cell) => {
@@ -123,12 +116,7 @@ async function fetchSheetValuesPublic(range) {
       return cell.v;
     })
   );
-  const result = [];
-  if (header.length) {
-    result.push(header);
-  }
-  result.push(...values);
-  return result;
+  return values;
 }
 
 async function appendSheetValues(range, values) {
@@ -190,6 +178,20 @@ function parseDateString(value) {
   const str = (value || "").toString().trim();
   if (!str) {
     return null;
+  }
+  const dateFuncMatch = str.match(/Date\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})\s*\)/i);
+  if (dateFuncMatch) {
+    const year = parseInt(dateFuncMatch[1], 10);
+    const monthZero = parseInt(dateFuncMatch[2], 10);
+    const day = parseInt(dateFuncMatch[3], 10);
+    return new Date(year, monthZero, day);
+  }
+  const ymdMatch = str.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10);
+    const day = parseInt(ymdMatch[3], 10);
+    return new Date(year, month - 1, day);
   }
   const d = new Date(str);
   if (Number.isNaN(d.getTime())) {
