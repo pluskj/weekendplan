@@ -611,7 +611,14 @@ async function loadPermissionAndDecideRole() {
         false
       );
     }
-    document.getElementById("logout-button").style.display = "inline-block";
+    const logoutButtonEl = document.getElementById("logout-button");
+    const gsiContainerEl = document.getElementById("gsi-button-container");
+    if (gsiContainerEl) {
+      gsiContainerEl.style.display = "none";
+    }
+    if (logoutButtonEl) {
+      logoutButtonEl.style.display = "inline-block";
+    }
     setAdminSectionVisible(isAdmin);
     await loadPlanData(true);
   } catch (error) {
@@ -681,11 +688,10 @@ function initGoogleIdentity() {
   window.google.accounts.id.renderButton(
     document.getElementById("gsi-button-container"),
     {
-      type: "standard",
+      type: "icon",
       theme: "outline",
       size: "medium",
-      text: "continue_with",
-      shape: "rectangular",
+      shape: "circle",
     }
   );
 
@@ -722,6 +728,10 @@ function initLogout() {
     setAdminSectionVisible(false);
     setAuthStatus("로그아웃되었습니다.", false);
     document.getElementById("logout-button").style.display = "none";
+    const gsiContainerEl = document.getElementById("gsi-button-container");
+    if (gsiContainerEl) {
+      gsiContainerEl.style.display = "inline-block";
+    }
     setLoadingText("public-loading", "데이터를 불러오려면 로그인해주세요.");
   });
 }
