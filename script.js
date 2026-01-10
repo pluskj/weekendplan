@@ -303,8 +303,21 @@ function renderPublicTable() {
     return true;
   });
 
+  let previousMonthKey = null;
   rows.forEach((row) => {
     const tr = document.createElement("tr");
+    const dateValue = row[COL_DATE] || "";
+    const d = parseDateString(dateValue);
+    let currentMonthKey = null;
+    if (d) {
+      currentMonthKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    }
+    if (previousMonthKey !== null && currentMonthKey && currentMonthKey !== previousMonthKey) {
+      tr.classList.add("month-separator-row");
+    }
+    if (currentMonthKey) {
+      previousMonthKey = currentMonthKey;
+    }
     publicVisibleColumnIndexes.forEach((idx) => {
       const td = document.createElement("td");
       let value = row[idx] || "";
@@ -351,8 +364,21 @@ function renderAdminTable() {
   headerRow.appendChild(thActions);
   thead.appendChild(headerRow);
 
+  let previousMonthKey = null;
   planRows.forEach((row, index) => {
     const tr = document.createElement("tr");
+    const dateValue = row[COL_DATE] || "";
+    const d = parseDateString(dateValue);
+    let currentMonthKey = null;
+    if (d) {
+      currentMonthKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    }
+    if (previousMonthKey !== null && currentMonthKey && currentMonthKey !== previousMonthKey) {
+      tr.classList.add("month-separator-row");
+    }
+    if (currentMonthKey) {
+      previousMonthKey = currentMonthKey;
+    }
     planHeader.forEach((_, colIndex) => {
       const td = document.createElement("td");
       let value = row[colIndex] || "";

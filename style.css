@@ -117,6 +117,12 @@ body {
 .data-table td {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  border-left: 1px solid #e5e7eb;
 }
 
 .data-table th {
@@ -141,6 +147,10 @@ body {
 
 .cell-left {
   text-align: left;
+}
+
+.data-table tbody tr.month-separator-row td {
+  border-top: 2px solid #4b5563;
 }
 
 .data-table tbody tr:nth-child(odd) {
