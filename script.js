@@ -652,14 +652,14 @@ async function loadPermissionAndDecideRole() {
     const values = await fetchSheetValues(`${PERMISSION_SHEET_NAME}!A2:B`);
     const entries = values
       .map((row) => ({
-        email: (row[0] || "").toString().trim(),
+        email: (row[0] || "").toString().trim().toLowerCase(),
         role: (row[1] || "").toString().trim().toLowerCase(),
       }))
       .filter((entry) => entry.email);
-    isSuperAdmin = !!googleUserEmail && entries.some(
-      (entry) => entry.email === googleUserEmail && entry.role === "superadmin"
-    );
-    isAdmin = !!googleUserEmail && entries.some((entry) => entry.email === googleUserEmail);
+    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
+    isSuperAdmin =
+      !!userEmail && entries.some((entry) => entry.email === userEmail && entry.role === "superadmin");
+    isAdmin = !!userEmail && entries.some((entry) => entry.email === userEmail);
     if (isSuperAdmin) {
       setAuthStatus(`${googleUserEmail} (최고관리자)`, false);
     } else if (isAdmin) {
