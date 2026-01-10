@@ -80,12 +80,12 @@ async function fetchSheetValues(range) {
   return data.values || [];
 }
 
-async function fetchSheetValuesPublic(range) {
+async function fetchGvizValues(rangeA1) {
   const rangePart = (() => {
-    if (!range) {
+    if (!rangeA1) {
       return `A${PLAN_HEADER_ROW}:J`;
     }
-    const parts = range.split("!");
+    const parts = rangeA1.split("!");
     if (parts.length === 2) {
       return parts[1];
     }
@@ -117,6 +117,18 @@ async function fetchSheetValuesPublic(range) {
     })
   );
   return values;
+}
+
+async function fetchSheetValuesPublic() {
+  const headerRows = await fetchGvizValues(`${PLAN_SHEET_NAME}!A${PLAN_HEADER_ROW}:J${PLAN_HEADER_ROW}`);
+  const dataRows = await fetchGvizValues(`${PLAN_SHEET_NAME}!A${PLAN_DATA_START_ROW}:J`);
+  const header = headerRows[0] || [];
+  const result = [];
+  if (header.length) {
+    result.push(header);
+  }
+  result.push(...dataRows);
+  return result;
 }
 
 async function appendSheetValues(range, values) {
@@ -588,12 +600,12 @@ async function loadPlanData(forAdmin) {
     if (forAdmin && isAdmin) {
       setLoadingText("admin-loading", "계획표를 불러오는 중입니다...");
     }
-    const range = `${PLAN_SHEET_NAME}!A${PLAN_HEADER_ROW}:J`;
     let values;
     if (forAdmin) {
+      const range = `${PLAN_SHEET_NAME}!A${PLAN_HEADER_ROW}:J`;
       values = await fetchSheetValues(range);
     } else {
-      values = await fetchSheetValuesPublic(range);
+      values = await fetchSheetValuesPublic();
     }
     if (!values.length) {
       planHeader = [];
