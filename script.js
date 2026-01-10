@@ -551,14 +551,7 @@ async function loadPlanData(forAdmin) {
     if (forAdmin) {
       values = await fetchSheetValues(range);
     } else {
-      if (API_KEY) {
-        values = await fetchSheetValuesPublic(range);
-      } else if (accessToken) {
-        values = await fetchSheetValues(range);
-      } else {
-        setLoadingText("public-loading", "공개 조회 설정이 필요합니다. 관리자에게 문의하세요.");
-        return;
-      }
+      values = await fetchSheetValuesPublic(range);
     }
     if (!values.length) {
       planHeader = [];
