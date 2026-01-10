@@ -29,6 +29,46 @@ let publicVisibleColumnIndexes = [];
 let publicVisiblePublishColumnIndex = null;
 let outlineCache = {};
 const SIX_MONTH_DAYS = 180;
+let currentYearFilter = new Date().getFullYear();
+
+function initYearFilter() {
+  const select = document.getElementById("year-filter");
+  if (!select) {
+    return;
+  }
+  const years = new Set();
+  planRows.forEach((row) => {
+    const year = getYearFromRow(row);
+    if (year) {
+      years.add(year);
+    }
+  });
+  const nowYear = new Date().getFullYear();
+  years.add(nowYear);
+  const sortedYears = Array.from(years).sort((a, b) => a - b);
+  select.innerHTML = "";
+  sortedYears.forEach((year) => {
+    const option = document.createElement("option");
+    option.value = String(year);
+    option.textContent = `${year}`;
+    select.appendChild(option);
+  });
+  if (!currentYearFilter) {
+    currentYearFilter = nowYear;
+  }
+  select.value = String(currentYearFilter);
+  select.addEventListener("change", () => {
+    const value = select.value;
+    const parsed = parseInt(value, 10);
+    if (!Number.isNaN(parsed)) {
+      currentYearFilter = parsed;
+      renderPublicTable();
+      if (isAdmin) {
+        renderAdminTable();
+      }
+    }
+  });
+}
 
 let tokenClient = null;
 
@@ -212,6 +252,15 @@ function parseDateString(value) {
   return d;
 }
 
+function getYearFromRow(row) {
+  const value = row[COL_DATE] || "";
+  const d = parseDateString(value);
+  if (!d) {
+    return null;
+  }
+  return d.getFullYear();
+}
+
 function formatDateDisplay(value) {
   const d = parseDateString(value);
   if (!d) {
@@ -291,6 +340,10 @@ function renderPublicTable() {
   thead.appendChild(headerRow);
 
   const rows = planRows.filter((row) => {
+    const year = getYearFromRow(row);
+    if (year && currentYearFilter && year !== currentYearFilter) {
+      return false;
+    }
     if (publicVisiblePublishColumnIndex == null) {
       return true;
     }
@@ -365,7 +418,14 @@ function renderAdminTable() {
   thead.appendChild(headerRow);
 
   let previousMonthKey = null;
-  planRows.forEach((row, index) => {
+  const rows = planRows.filter((row) => {
+    const year = getYearFromRow(row);
+    if (year && currentYearFilter && year !== currentYearFilter) {
+      return false;
+    }
+    return true;
+  });
+  rows.forEach((row, index) => {
     const tr = document.createElement("tr");
     const dateValue = row[COL_DATE] || "";
     const d = parseDateString(dateValue);
@@ -651,6 +711,7 @@ async function loadPlanData(forAdmin) {
     }
     planHeader = values[0];
     planRows = values.slice(1);
+    initYearFilter();
     renderPublicTable();
     if (forAdmin && isAdmin) {
       buildAdminFormFields();
