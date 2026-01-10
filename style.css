@@ -128,7 +128,7 @@ body {
 
 .table-wrapper {
   overflow: auto;
-  max-height: none;
+  max-height: calc(100vh - 160px);
   border-radius: 0;
   border: none;
 }
@@ -159,6 +159,7 @@ body {
   position: sticky;
   left: 0;
   z-index: 2;
+  background-color: #ffffff;
 }
 
 .data-table thead th:first-child {
@@ -192,6 +193,7 @@ body {
 
 .data-table tbody tr.month-separator-row td {
   border-top: 1px solid #000000;
+  border-bottom: 1px solid #000000;
 }
 
 .data-table tbody tr:nth-child(odd) {
