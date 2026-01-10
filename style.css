@@ -89,6 +89,9 @@ body {
   padding: 0;
   background-color: transparent;
   box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .section-title {
@@ -127,8 +130,9 @@ body {
 }
 
 .table-wrapper {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  max-height: calc(100vh - 160px);
   border-radius: 0;
   border: none;
 }
@@ -160,6 +164,7 @@ body {
   left: 0;
   z-index: 2;
   background-color: #ffffff;
+  box-shadow: 2px 0 0 #e5e7eb;
 }
 
 .data-table thead th:first-child {
