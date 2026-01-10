@@ -183,6 +183,18 @@ function parseDateString(value) {
   return d;
 }
 
+function formatDateDisplay(value) {
+  const d = parseDateString(value);
+  if (!d) {
+    const str = (value || "").toString();
+    return str;
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
 async function updateSheetRow(rowNumber, values) {
   if (!accessToken) {
     throw new Error("액세스 토큰이 없습니다. 먼저 로그인하세요.");
@@ -244,6 +256,7 @@ function renderPublicTable() {
   publicVisibleColumnIndexes.forEach((idx) => {
     const th = document.createElement("th");
     th.textContent = planHeader[idx] || "";
+    th.className = "cell-center";
     headerRow.appendChild(th);
   });
   thead.appendChild(headerRow);
@@ -265,7 +278,12 @@ function renderPublicTable() {
     const tr = document.createElement("tr");
     publicVisibleColumnIndexes.forEach((idx) => {
       const td = document.createElement("td");
-      td.textContent = row[idx] || "";
+      let value = row[idx] || "";
+      if (idx === COL_DATE) {
+        value = formatDateDisplay(value);
+      }
+      td.textContent = value;
+      td.className = idx === COL_TOPIC ? "cell-left" : "cell-center";
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -292,13 +310,15 @@ function renderAdminTable() {
   }
 
   const headerRow = document.createElement("tr");
-  planHeader.forEach((colName) => {
+  planHeader.forEach((colName, colIndex) => {
     const th = document.createElement("th");
     th.textContent = colName || "";
+    th.className = "cell-center";
     headerRow.appendChild(th);
   });
   const thActions = document.createElement("th");
   thActions.textContent = "관리";
+  thActions.className = "cell-center";
   headerRow.appendChild(thActions);
   thead.appendChild(headerRow);
 
@@ -306,7 +326,12 @@ function renderAdminTable() {
     const tr = document.createElement("tr");
     planHeader.forEach((_, colIndex) => {
       const td = document.createElement("td");
-      td.textContent = row[colIndex] || "";
+      let value = row[colIndex] || "";
+      if (colIndex === COL_DATE) {
+        value = formatDateDisplay(value);
+      }
+      td.textContent = value;
+      td.className = colIndex === COL_TOPIC ? "cell-left" : "cell-center";
       tr.appendChild(td);
     });
     const tdActions = document.createElement("td");
