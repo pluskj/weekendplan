@@ -267,7 +267,8 @@ function formatDateDisplay(value) {
     const str = (value || "").toString();
     return str;
   }
-  const year = d.getFullYear();
+  const fullYear = d.getFullYear();
+  const year = String(fullYear % 100).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}/${month}/${day}`;
