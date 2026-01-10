@@ -107,6 +107,13 @@ async function fetchSheetValuesPublic(range) {
   }
   const json = JSON.parse(text.slice(start, end + 1));
   const table = json.table || {};
+  const cols = table.cols || [];
+  const header = cols.map((col) => {
+    if (!col || typeof col.label === "undefined" || col.label === null) {
+      return "";
+    }
+    return col.label;
+  });
   const rows = table.rows || [];
   const values = rows.map((row) =>
     (row.c || []).map((cell) => {
@@ -116,7 +123,12 @@ async function fetchSheetValuesPublic(range) {
       return cell.v;
     })
   );
-  return values;
+  const result = [];
+  if (header.length) {
+    result.push(header);
+  }
+  result.push(...values);
+  return result;
 }
 
 async function appendSheetValues(range, values) {
@@ -172,6 +184,9 @@ async function getOutlineTopic(no) {
 }
 
 function parseDateString(value) {
+  if (value instanceof Date) {
+    return value;
+  }
   const str = (value || "").toString().trim();
   if (!str) {
     return null;
