@@ -91,7 +91,7 @@ async function fetchSheetValuesPublic(range) {
     }
     return parts[0];
   })();
-  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISHED_DOC_ID}/gviz/tq?sheet=${encodeURIComponent(
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
     PLAN_SHEET_NAME
   )}&range=${encodeURIComponent(rangePart)}&headers=1&tqx=out:json`;
   const res = await fetch(url);
