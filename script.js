@@ -281,7 +281,9 @@ function updateDuplicateHighlights() {
   trs.forEach(tr => {
     const rowIndex = parseInt(tr.dataset.rowIndex, 10);
     // Find the Outline No cell (COL_OUTLINE_NO)
-    const targetCell = tr.children[COL_OUTLINE_NO];
+    // If isAdmin, the first column is checkbox, so we shift by 1
+    const domIndex = COL_OUTLINE_NO + (isAdmin ? 1 : 0);
+    const targetCell = tr.children[domIndex];
     if (targetCell) {
         if (duplicateIndices.has(rowIndex)) {
             targetCell.classList.add("duplicate-highlight");
@@ -483,6 +485,12 @@ function renderTable() {
             // because 'row' in the closure might be stale if the row was updated (e.g. cleared) without re-rendering.
             const currentRowData = planRows[rowIndex] || [];
             const originalValue = currentRowData[colIndex] || "";
+            // Capture original topic value if we are editing outline number
+            let originalTopicValue = "";
+            if (colIndex === COL_OUTLINE_NO) {
+                originalTopicValue = currentRowData[COL_TOPIC] || "";
+            }
+            
             const input = document.createElement("input");
             input.type = colIndex === COL_DATE ? "date" : "text";
             input.className = "admin-cell-input";
@@ -490,10 +498,10 @@ function renderTable() {
             if (colIndex === COL_DATE) {
               const dObj = parseDateString(originalValue);
               if (dObj) {
-                const y = dObj.getFullYear();
-                const m = String(dObj.getMonth() + 1).padStart(2, "0");
-                const day = String(dObj.getDate()).padStart(2, "0");
-                input.value = `${y}-${m}-${day}`;
+                const yyyy = dObj.getFullYear();
+                const mm = String(dObj.getMonth() + 1).padStart(2, "0");
+                const dd = String(dObj.getDate()).padStart(2, "0");
+                input.value = `${yyyy}-${mm}-${dd}`;
               } else {
                 input.value = "";
               }
@@ -522,18 +530,12 @@ function renderTable() {
                         if (topicCell) {
                             // Update visually
                             topicCell.textContent = topic;
-                            // Update internal data
+                            // Update internal data (Optimistic)
                             if (!planRows[rowIndex]) planRows[rowIndex] = [];
                             planRows[rowIndex][COL_TOPIC] = topic;
                             
-                            // Explicitly trigger save for the row to sync the topic immediately
-                            // This guards against the race condition where 'save()' on blur might miss the topic update
-                            // or if the user doesn't blur properly.
-                            const currentRow = planRows[rowIndex];
-                            const originalIdx = currentRow._originalIndex !== undefined ? currentRow._originalIndex : rowIndex;
-                            const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
-                            // We don't await here to avoid blocking, but we log errors
-                            updateSheetRow(sheetRowNumber, currentRow).catch(e => console.error("Topic auto-save failed", e));
+                            // Note: We DO NOT save to sheet here anymore to avoid race conditions 
+                            // and to ensure validation (duplicate check) in save() is respected.
                         }
                     }
                 });
@@ -546,7 +548,8 @@ function renderTable() {
             const save = async () => {
                 let newValue = input.value;
                 
-                // If it's a date field, ensure YYYY. MM. DD format for consistency
+                // If it's a date field, ensure YYYY/MM/DD format for consistency
+                // This format is recognized by Google Sheets as a date, allowing Sheet formatting to apply
                 if (colIndex === COL_DATE && newValue) {
                     // input[type="date"] returns YYYY-MM-DD
                     const parts = newValue.split("-");
@@ -554,28 +557,85 @@ function renderTable() {
                         const yyyy = parts[0];
                         const mm = parts[1];
                         const dd = parts[2];
-                        newValue = `${yyyy}. ${mm}. ${dd}`;
+                        newValue = `${yyyy}/${mm}/${dd}`;
                     }
                 }
 
                 // Check for duplicate Outline No
                 if (colIndex === COL_OUTLINE_NO && newValue.trim()) {
                     const duplicates = [];
+                    const newValStr = newValue.trim();
                     planRows.forEach((r, idx) => {
-                        if (idx !== rowIndex && r[COL_OUTLINE_NO] === newValue.trim()) {
+                        const rVal = (r[COL_OUTLINE_NO] || "").toString().trim();
+                        if (idx !== rowIndex && rVal === newValStr) {
                             duplicates.push({ index: idx, date: r[COL_DATE] });
                         }
                     });
 
                     if (duplicates.length > 0) {
-                        const dateStrings = duplicates.map(d => formatDateDisplay(d.date)).join(", ");
-                        const confirmed = confirm(
-                            `경고: 이미 사용된 골자번호입니다.\n사용된 날짜: ${dateStrings}\n\n그래도 입력하시겠습니까?`
-                        );
-                        if (!confirmed) {
+                        // Check for 6-month restriction
+                        const currentRowDateVal = planRows[rowIndex][COL_DATE];
+                        const currentRowDate = parseDateString(currentRowDateVal);
+                        
+                        let isBlocked = false;
+                        const conflictDates = [];
+                        
+                        duplicates.forEach(d => {
+                             const dupDate = parseDateString(d.date);
+                             if (currentRowDate && dupDate) {
+                                 const diffTime = Math.abs(currentRowDate - dupDate);
+                                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                 if (diffDays < SIX_MONTH_DAYS) {
+                                     isBlocked = true;
+                                 }
+                             }
+                             conflictDates.push(formatDateDisplay(d.date));
+                        });
+
+                        const dateStrings = conflictDates.join(", ");
+
+                        if (isBlocked) {
+                            alert(
+                                `경고: 6개월 이내에 이미 사용된 골자번호입니다.\n사용된 날짜: ${dateStrings}\n\n입력이 취소됩니다.`
+                            );
                             // Revert visual
                             td.textContent = displayValue;
+                            input.value = originalValue; // Restore input value just in case
+                            
+                            // Revert topic if we changed it (Optimistic update in input listener)
+                            if (colIndex === COL_OUTLINE_NO) {
+                                if (!planRows[rowIndex]) planRows[rowIndex] = [];
+                                planRows[rowIndex][COL_TOPIC] = originalTopicValue;
+                                // Revert Topic Cell visually
+                                const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
+                                const topicCell = tr.children[domIndex];
+                                if (topicCell) {
+                                    topicCell.textContent = originalTopicValue;
+                                }
+                            }
                             return; // Stop saving
+                        } else {
+                            const confirmed = confirm(
+                                `경고: 이미 사용된 골자번호입니다.\n사용된 날짜: ${dateStrings}\n\n그래도 입력하시겠습니까?`
+                            );
+                            if (!confirmed) {
+                                // Revert visual
+                                td.textContent = displayValue;
+                                input.value = originalValue;
+                                
+                                // Revert topic if we changed it
+                                if (colIndex === COL_OUTLINE_NO) {
+                                    if (!planRows[rowIndex]) planRows[rowIndex] = [];
+                                    planRows[rowIndex][COL_TOPIC] = originalTopicValue;
+                                    // Revert Topic Cell visually
+                                    const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
+                                    const topicCell = tr.children[domIndex];
+                                    if (topicCell) {
+                                        topicCell.textContent = originalTopicValue;
+                                    }
+                                }
+                                return; // Stop saving
+                            }
                         }
                     }
 
@@ -604,7 +664,7 @@ function renderTable() {
                 if (!planRows[rowIndex]) planRows[rowIndex] = [];
                 planRows[rowIndex][colIndex] = newValue;
 
-                // Ensure Date column is always formatted as YYYY. MM. DD before saving
+                // Ensure Date column is always formatted as YYYY/MM/DD before saving
                 // This prevents ISO strings (from JSON Date objects) from being sent back to the sheet
                 const currentDateVal = planRows[rowIndex][COL_DATE];
                 if (currentDateVal) {
@@ -613,7 +673,7 @@ function renderTable() {
                         const yyyy = dObj.getFullYear();
                         const mm = String(dObj.getMonth() + 1).padStart(2, "0");
                         const dd = String(dObj.getDate()).padStart(2, "0");
-                        planRows[rowIndex][COL_DATE] = `${yyyy}. ${mm}. ${dd}`;
+                        planRows[rowIndex][COL_DATE] = `${yyyy}/${mm}/${dd}`;
                     }
                 }
 
@@ -692,7 +752,7 @@ function renderTable() {
                 const y = dObj.getFullYear();
                 const m = String(dObj.getMonth() + 1).padStart(2, "0");
                 const day = String(dObj.getDate()).padStart(2, "0");
-                formattedDate = `${y}. ${m}. ${day}`;
+                formattedDate = `${y}/${m}/${day}`;
             }
 
             const newRowData = new Array(planHeader.length).fill("");
@@ -868,7 +928,7 @@ async function loadPlanData(forAdmin) {
                         const y = dObj.getFullYear();
                         const m = String(dObj.getMonth() + 1).padStart(2, "0");
                         const day = String(dObj.getDate()).padStart(2, "0");
-                        formattedDate = `${y}. ${m}. ${day}`;
+                        formattedDate = `${y}/${m}/${day}`;
                     }
 
                     const newRowData = new Array(planHeader.length).fill("");
@@ -958,8 +1018,8 @@ async function loadPlanData(forAdmin) {
             const y = nextDate.getFullYear();
             const m = String(nextDate.getMonth() + 1).padStart(2, "0");
             const d = String(nextDate.getDate()).padStart(2, "0");
-            // Use 'YYYY. MM. DD' format for Google Sheets compatibility
-            newRow[COL_DATE] = `${y}. ${m}. ${d}`;
+            // Use 'YYYY/MM/DD' format for Google Sheets compatibility (parsed as Date)
+            newRow[COL_DATE] = `${y}/${m}/${d}`;
             
             // Assign original index for the new row
             newRow._originalIndex = nextSheetIndex++;
