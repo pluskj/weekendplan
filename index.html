@@ -11,15 +11,15 @@
 <body>
   <header class="top-bar">
     <div class="top-bar-row top-bar-row-main">
-      <h1 class="app-title">춘천남부 공개강연 계획표</h1>
+      <h1 class="app-title">공개강연 계획표</h1>
     </div>
     <div class="top-bar-row top-bar-row-sub">
       <div class="header-left">
-        <select id="year-filter" class="year-select"></select>
-        <label for="year-filter" class="year-label">연도</label>
+        <button id="bulk-delete-btn" class="button button-danger-small" style="display:none; margin-right: 10px; font-size: 0.9rem; padding: 5px 10px;">선택 삭제</button>
       </div>
       <div class="auth-area">
         <div id="auth-status" class="auth-status"></div>
+        <div id="loading-indicator" class="auth-status" style="margin-right: 10px;"></div>
         <div id="gsi-button-container"></div>
         <button id="logout-button" class="icon-button" style="display:none" title="로그아웃">⎋</button>
       </div>
@@ -27,40 +27,10 @@
   </header>
 
   <main class="layout">
-    <section class="section section-public">
-      <div id="public-loading" class="info-text">계획표를 불러오는 중입니다...</div>
-      <div class="table-wrapper">
-        <table id="public-table" class="data-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section id="admin-section" class="section" style="display:none">
-      <h2 class="section-title">관리자 전용 관리 화면</h2>
-      <p class="section-description">
-        권한 시트에 등록된 계정만 데이터 추가·수정이 가능합니다.
-      </p>
-
+    <section class="section">
       <div class="card">
-        <h3 class="card-title">강연 정보 입력 / 수정</h3>
-        <form id="plan-form" class="plan-form">
-          <input type="hidden" id="edit-row-number">
-          <div class="form-grid" id="plan-form-fields">
-          </div>
-          <div class="form-actions">
-            <button type="submit" id="save-button" class="button button-primary">새 행 추가</button>
-            <button type="button" id="cancel-edit-button" class="button button-secondary" style="display:none">수정 취소</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h3 class="card-title">전체 계획표</h3>
-        <div id="admin-loading" class="info-text">계획표 데이터를 불러오는 중...</div>
         <div class="table-wrapper">
-          <table id="admin-table" class="data-table">
+          <table id="main-table" class="data-table">
             <thead></thead>
             <tbody></tbody>
           </table>
