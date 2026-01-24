@@ -81,7 +81,19 @@ function setLoadingText(targetId, text) {
   // Ignore targetId and always use the global loading indicator in the top bar
   const el = document.getElementById("loading-indicator");
   if (el) {
-    el.textContent = text;
+    if (!text) {
+        el.innerHTML = "";
+        return;
+    }
+    
+    if (text.includes("중") || text.includes("Loading")) {
+        el.innerHTML = `<span class="spinner"></span><span>${text}</span>`;
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+    } else {
+        el.textContent = text;
+        el.style.display = "block";
+    }
   }
 }
 
