@@ -138,6 +138,20 @@ function setLoadingText(id, text) {
     if (el) el.textContent = text;
 }
 
+function showGlobalLoading(message) {
+    const overlay = document.getElementById("global-loading-overlay");
+    const textEl = document.getElementById("global-loading-text");
+    if (!overlay || !textEl) return;
+    textEl.textContent = message || "화면 준비 중...";
+    overlay.style.display = "flex";
+}
+
+function hideGlobalLoading() {
+    const overlay = document.getElementById("global-loading-overlay");
+    if (!overlay) return;
+    overlay.style.display = "none";
+}
+
 function parseDateString(dateStr) {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -688,7 +702,7 @@ async function processPlanDataResponse(data) {
 
 async function loadPlanData(forceRefresh = false) {
     setLoadingText("loading-text", "데이터 불러오는 중...");
-    setLoadingText("loading-indicator", "화면 준비 중...");
+    showGlobalLoading("화면 준비 중...");
     try {
         const email = googleUserEmail || "";
         const response = await callAppsScript("initData", { email });
@@ -711,11 +725,11 @@ async function loadPlanData(forceRefresh = false) {
         isOutlineCacheLoaded = true;
         
         processPlanDataResponse(response.plan || {});
-        setLoadingText("loading-indicator", "");
+        hideGlobalLoading();
     } catch (err) {
         console.error(err);
         setLoadingText("loading-text", "데이터 로드 실패: " + err.message);
-        setLoadingText("loading-indicator", "");
+        hideGlobalLoading();
     }
 }
 
