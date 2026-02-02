@@ -1006,9 +1006,16 @@ async function loadPermissionAndDecideRole() {
     const roleLabelRaw = permData && permData.roleLabel ? permData.roleLabel : "";
     let roleLabel = roleLabelRaw;
     if (!roleLabel) {
-        roleLabel = isAdmin ? "관리자" : "일반 사용자";
+        roleLabel = isAdmin ? "관리자" : "일반 사용자 (읽기 전용)";
     }
     setAuthStatus(`${googleUserEmail} (${roleLabel})`, false);
+
+    // Toggle Admin Mode Class
+    if (isAdmin) {
+        document.body.classList.add("admin-mode");
+    } else {
+        document.body.classList.remove("admin-mode");
+    }
     
     const logoutButtonEl = document.getElementById("logout-button");
     const gsiContainerEl = document.getElementById("gsi-button-container");
@@ -1094,6 +1101,7 @@ function initLogout() {
     isAdmin = false;
     isSuperAdmin = false;
     adminName = "";
+    document.body.classList.remove("admin-mode");
     planHeader = [];
     planRows = [];
     document.getElementById("main-table").querySelector("thead").innerHTML = "";

@@ -138,14 +138,14 @@ body {
   top: 0;
   z-index: 20;
   background-color: #f1f5f9; /* Slate 100 */
-  color: #475569; /* Slate 600 */
+  color: #1e293b; /* Darker text */
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 600;
+  font-weight: 700; /* Bolder font */
   font-size: 0.75rem;
   padding: 0.75rem 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 1px solid #f1f5f9; /* Subtle separator */
+  border-bottom: 2px solid #64748b; /* Darker bottom border */
+  border-right: 1px solid #94a3b8; /* Visible vertical line */
   white-space: nowrap;
 }
 
@@ -165,8 +165,8 @@ body {
 .data-table td {
   padding: 0.6rem 0.75rem; /* More padding */
   vertical-align: middle;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #cbd5e1; /* Darker cell bottom */
+  border-right: 1px solid #cbd5e1; /* Darker cell right */
   color: #1e293b; /* Slate 800 */
 }
 
