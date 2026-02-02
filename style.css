@@ -51,8 +51,12 @@ body {
 }
 
 .app-title::before {
-  content: "📅";
-  font-size: 1.2em;
+  content: "";
+  width: 24px;
+  height: 24px;
+  background-image: url("https://cdn-icons-png.flaticon.com/512/2693/2693507.png");
+  background-size: contain;
+  background-repeat: no-repeat;
 }
 
 .auth-area {
@@ -426,4 +430,11 @@ body {
   .top-bar-row { justify-content: space-between; }
   .app-title { font-size: 1.1rem; }
   .auth-status { display: none; } /* Hide email on small screens to save space */
+  .data-table { font-size: 0.8rem; }
+  .data-table thead th { font-size: 0.8rem; padding: 0.5rem 0.25rem; }
+  .data-table td { padding: 0.4rem 0.5rem; }
+  .col-0 { min-width: 70px; }
+  .col-1 { min-width: 50px; }
+  .col-2 { min-width: 220px; }
+  .col-3, .col-4, .data-table .col-5, .data-table .col-6, .col-7 { min-width: 80px; }
 }
