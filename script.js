@@ -252,6 +252,7 @@ function renderTable() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const publicLimitDate = new Date(today.getTime() + 365 * 24 * 60 * 60 * 1000);
 
   // Header
   const headerRow = document.createElement("tr");
@@ -299,7 +300,8 @@ function renderTable() {
 
   planRows.forEach((row, rowIndex) => {
      const d = parseDateString(row[COL_DATE]);
-     if (d && d < today) return; // Filter past dates
+     if (d && d < today) return;
+     if (!isAdmin && d && d > publicLimitDate) return;
 
      const tr = document.createElement("tr");
      if (isMoveMode && rowIndex === moveSourceRowIndex) {
