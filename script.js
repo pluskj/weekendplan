@@ -161,6 +161,14 @@ function parseDateString(dateStr) {
     }
     const str = String(dateStr).trim();
     if (!str) return null;
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (isoMatch) {
+        const y = parseInt(isoMatch[1], 10);
+        const m = parseInt(isoMatch[2], 10) - 1;
+        const d = parseInt(isoMatch[3], 10);
+        const isoDate = new Date(y, m, d);
+        if (!isNaN(isoDate.getTime())) return isoDate;
+    }
     const dotMatch = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
     if (dotMatch) {
         const y = parseInt(dotMatch[1], 10);

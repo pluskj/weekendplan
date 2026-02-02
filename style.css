@@ -34,7 +34,6 @@ body {
 
 .top-bar-row-main {
   flex: 1;
-  justify-content: center;
 }
 
 .top-bar-row-sub {
@@ -319,16 +318,16 @@ body {
 }
 
 .icon-button {
-  width: 30px;
-  height: 30px;
-  padding: 0;
+  width: auto;
+  height: auto;
+  padding: 2px 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%; /* Circle */
+  border-radius: 9999px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 1rem;
