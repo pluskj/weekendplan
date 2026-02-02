@@ -175,10 +175,7 @@ body {
 }
 
 .editable-cell:hover {
-  background-color: #f8fafc; /* Lighter than row hover */
-  box-shadow: inset 0 0 0 2px #4f46e5; /* Focus ring indication */
-  position: relative;
-  z-index: 1;
+  background-color: #e0f2fe;
 }
 
 /* Column Widths */
@@ -187,9 +184,13 @@ body {
 .col-2 { min-width: 280px; white-space: normal; font-weight: 500; } /* Topic */
 .col-3 { min-width: 100px; white-space: nowrap; text-align: center; } /* Speaker */
 .col-4 { min-width: 120px; white-space: nowrap; text-align: center; } /* Congregation */
-.col-5 { min-width: 120px; white-space: normal; font-size: 0.85rem; color: #64748b; } /* Contact */
-.col-6 { min-width: 100px; white-space: nowrap; font-size: 0.85rem; color: #64748b; } /* Speaker Contact */
+.data-table .col-5 { min-width: 120px; white-space: normal; font-size: 0.85rem; color: #64748b; text-align: center !important; } /* Contact (Congregation) */
+.data-table .col-6 { min-width: 100px; white-space: nowrap; font-size: 0.85rem; color: #64748b; text-align: center !important; } /* Speaker Contact */
 .col-7 { min-width: 80px; white-space: nowrap; text-align: center; } /* Inviter */
+.col-action { min-width: 80px; white-space: nowrap; text-align: center; } /* Admin Action */
+.data-table .col-8 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Host */
+.data-table .col-9 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Reader */
+.data-table .col-10 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Prayer */
 
 /* Sticky Columns */
 .col-checkbox,
@@ -276,8 +277,8 @@ body {
 }
 
 .icon-button {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -288,11 +289,57 @@ body {
   border-radius: 50%; /* Circle */
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 1.25rem;
 }
 
 .icon-button:hover {
   background-color: rgba(255, 255, 255, 0.2);
   transform: scale(1.05);
+}
+
+.icon-button.button-danger-small {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+}
+
+.icon-button.button-danger-small:hover {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+}
+
+/* Move Button Styles */
+.icon-button-small {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  margin: 0 2px;
+}
+
+.button-move {
+  background-color: #3b82f6; /* Blue 500 */
+  color: white;
+}
+.button-move:hover {
+  background-color: #2563eb; /* Blue 600 */
+  transform: translateY(-1px);
+}
+
+.move-source-row {
+  background-color: #dbeafe !important; /* Blue 100 */
+  border: 2px dashed #3b82f6;
+}
+
+.move-target-mode .data-table tbody tr:hover {
+  cursor: alias; /* Show alias cursor to indicate drop/move */
+  background-color: #eff6ff !important; /* Very light blue */
 }
 
 /* Loading */

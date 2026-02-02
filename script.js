@@ -18,6 +18,7 @@ const COL_INVITER = 7;
 // const COL_HOST = 8; // Deleted
 // const COL_READER = 9; // Deleted
 // const COL_PRAYER = 10; // Deleted
+
 let googleUserEmail = null;
 let isAdmin = false;
 let isSuperAdmin = false;
@@ -27,6 +28,47 @@ let planRows = [];
 let outlineCache = {};
 let isOutlineCacheLoaded = false;
 const SIX_MONTH_DAYS = 180;
+
+let isMoveMode = false;
+let moveSourceRowIndex = null;
+const selectedRowIndices = new Set();
+let lastCheckedIndex = null;
+
+function updateOutlineDuplicateHighlights() {
+    const table = document.getElementById("main-table");
+    if (!table) return;
+    const tbody = table.querySelector("tbody");
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const map = {};
+    rows.forEach((tr) => {
+        const rowIndex = parseInt(tr.dataset.rowIndex, 10);
+        if (Number.isNaN(rowIndex)) return;
+        const row = planRows[rowIndex] || [];
+        const outline = String(row[COL_OUTLINE_NO] || "").trim();
+        const offset = isAdmin ? 1 : 0;
+        const domIndexOutline = COL_OUTLINE_NO + offset;
+        const cell = tr.children[domIndexOutline];
+        if (cell) {
+            cell.classList.remove("duplicate-highlight");
+        }
+        if (!outline) return;
+        if (!map[outline]) map[outline] = [];
+        map[outline].push(tr);
+    });
+    Object.keys(map).forEach((key) => {
+        const arr = map[key];
+        if (!arr || arr.length < 2) return;
+        arr.forEach((tr) => {
+            const offset = isAdmin ? 1 : 0;
+            const domIndexOutline = COL_OUTLINE_NO + offset;
+            const cell = tr.children[domIndexOutline];
+            if (cell) {
+                cell.classList.add("duplicate-highlight");
+            }
+        });
+    });
+}
 
 function updateTopicCell(rowIndex, topicValue, tr) {
     // 1. Update internal data
@@ -49,267 +91,119 @@ function ensureAppsScriptUrl() {
   }
 }
 
-function buildQuery(params) {
-  const searchParams = new URLSearchParams();
-  Object.keys(params || {}).forEach((key) => {
-    const value = params[key];
-    if (value === undefined || value === null) {
-      return;
-    }
-    searchParams.append(key, String(value));
-  });
-  return searchParams.toString();
-}
-
-async function callAppsScript(params) {
-  ensureAppsScriptUrl();
-  const query = buildQuery(params);
-  const url = query ? `${APPS_SCRIPT_URL}?${query}` : APPS_SCRIPT_URL;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Apps Script 호출 실패: ${res.status} ${text}`);
-  }
-  const data = await res.json();
-  if (data && data.success === false && data.error) {
-    throw new Error(data.error);
-  }
-  return data;
-}
-
-function decodeJwt(token) {
-  try {
-    const payload = token.split(".")[1];
-    const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decoded);
-  } catch (e) {
-    return null;
-  }
-}
-
-function setAuthStatus(text, isError) {
-  const el = document.getElementById("auth-status");
-  el.textContent = text;
-  el.className = "auth-status" + (isError ? " error-text" : "");
-}
-
-function setLoadingText(targetId, text) {
-  // Ignore targetId and always use the global loading indicator in the top bar
-  const el = document.getElementById("loading-indicator");
-  if (el) {
-    if (!text) {
-        el.innerHTML = "";
-        el.style.display = "none";
-        return;
-    }
+async function callAppsScript(action, payload = {}) {
+    ensureAppsScriptUrl();
+    const url = APPS_SCRIPT_URL;
     
-    if (text.includes("중") || text.includes("Loading")) {
-        el.innerHTML = `<span class="spinner"></span><span>${text}</span>`;
-        el.style.display = "flex";
-        el.style.alignItems = "center";
-    } else {
-        el.textContent = text;
-        el.style.display = "block";
+    // Use text/plain to avoid CORS preflight (OPTIONS request) which Apps Script doesn't support
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({ action, ...payload })
+    });
+    
+    const json = await response.json();
+    if (!json.success) {
+        throw new Error(json.error || "Unknown error from Apps Script");
     }
-  }
+    return json;
 }
 
-async function loadOutlineCache() {
-  const email = (googleUserEmail || "").toString().trim().toLowerCase();
-  const data = await callAppsScript({
-    action: "getOutlineCache",
-    email,
-  });
-  const mapping = data && data.outline ? data.outline : {};
-  outlineCache = mapping;
-  isOutlineCacheLoaded = true;
+function setLoadingText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
 }
 
-async function getOutlineTopic(no) {
-  const trimmed = (no || "").toString().trim();
-  if (!trimmed) {
-    return "";
-  }
-  if (!isOutlineCacheLoaded) {
-    await loadOutlineCache();
-  }
-  return outlineCache[trimmed] || "";
+function parseDateString(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d;
 }
 
-function parseDateString(value) {
-  if (value instanceof Date) {
-    return value;
-  }
-  const str = (value || "").toString().trim();
-  if (!str) {
-    return null;
-  }
-
-  // 1. ISO String with Timezone (e.g. 2025-01-25T15:00:00.000Z)
-  // Use built-in Date parsing to handle timezone conversion correctly
-  if (str.includes("T") && !str.startsWith("Date(")) {
-      const d = new Date(str);
-      if (!Number.isNaN(d.getTime())) {
-          return d;
-      }
-  }
-
-  // 2. Google Apps Script Date(yyyy, m, d) format
-  const dateFuncMatch = str.match(/Date\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})\s*\)/i);
-  if (dateFuncMatch) {
-    const year = parseInt(dateFuncMatch[1], 10);
-    const monthZero = parseInt(dateFuncMatch[2], 10);
-    const day = parseInt(dateFuncMatch[3], 10);
-    return new Date(year, monthZero, day);
-  }
-
-  // 3. Strict YYYY-MM-DD or YYYY/MM/DD (No time part)
-  const ymdMatch = str.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/);
-  if (ymdMatch) {
-    const year = parseInt(ymdMatch[1], 10);
-    const month = parseInt(ymdMatch[2], 10);
-    const day = parseInt(ymdMatch[3], 10);
-    return new Date(year, month - 1, day);
-  }
-
-  // 4. YY/MM/DD
-  const yyMatch = str.match(/^(\d{2})\D+(\d{1,2})\D+(\d{1,2})$/);
-  if (yyMatch) {
-    const year = 2000 + parseInt(yyMatch[1], 10);
-    const month = parseInt(yyMatch[2], 10);
-    const day = parseInt(yyMatch[3], 10);
-    return new Date(year, month - 1, day);
-  }
-
-  // 5. YYYY. MM. DD (with dots and optional spaces)
-  const dotMatch = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-  if (dotMatch) {
-    const year = parseInt(dotMatch[1], 10);
-    const month = parseInt(dotMatch[2], 10);
-    const day = parseInt(dotMatch[3], 10);
-    return new Date(year, month - 1, day);
-  }
-
-  // 6. Fallback
-  const d = new Date(str);
-  if (Number.isNaN(d.getTime())) {
-    return null;
-  }
-  return d;
-}
-
-function getYearFromRow(row) {
-  const value = row[COL_DATE] || "";
-  const d = parseDateString(value);
-  if (!d) {
-    return null;
-  }
-  return d.getFullYear();
-}
-
-function formatDateDisplay(value) {
-  const d = parseDateString(value);
-  if (!d) {
-    const str = (value || "").toString();
-    return str;
-  }
-  const fullYear = d.getFullYear();
-  const year = String(fullYear).slice(-2);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}/${month}/${day}`;
-}
-
-async function updateSheetRow(rowNumber, values) {
-  const email = (googleUserEmail || "").toString().trim().toLowerCase();
-  const payload = {
-    action: "updateRow",
-    rowNumber: String(rowNumber),
-    email,
-    values: JSON.stringify(values),
-  };
-  const data = await callAppsScript(payload);
-  return data;
+function formatDateDisplay(dateStr) {
+    const d = parseDateString(dateStr);
+    if (!d) return dateStr;
+    const yyyy = d.getFullYear();
+    const yy = String(yyyy).slice(-2);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yy}/${mm}/${dd}`;
 }
 
 async function updateSheetRows(updates) {
-  const email = (googleUserEmail || "").toString().trim().toLowerCase();
-  const payload = {
-    action: "updateRows",
-    email,
-    updates: JSON.stringify(updates),
-  };
-  
-  try {
-    const data = await callAppsScript(payload);
-    return data;
-  } catch (e) {
-    // Fallback if backend is not yet deployed with 'updateRows' support
-    if (e.message && e.message.includes("지원하지 않는 action")) {
-        console.warn("Backend does not support 'updateRows' yet. Falling back to sequential updates.");
-        // Sequential execution
-        for (const update of updates) {
-            await updateSheetRow(update.rowNumber, update.values);
-        }
-        return { success: true };
-    }
-    throw e;
-  }
+    await callAppsScript("updateRows", {
+        email: googleUserEmail,
+        updates: JSON.stringify(updates)
+    });
 }
 
-async function appendSheetValues(range, values) {
-  const email = (googleUserEmail || "").toString().trim().toLowerCase();
-  const rowValues = Array.isArray(values) && values.length > 0 ? values[0] : [];
-  const payload = {
-    action: "appendRow",
-    email,
-    values: JSON.stringify(rowValues),
-  };
-  const data = await callAppsScript(payload);
-  return data;
+async function updateSheetRow(rowNumber, rowData) {
+    const updates = [{
+        rowNumber: String(rowNumber),
+        values: rowData
+    }];
+    await updateSheetRows(updates);
 }
 
-let selectedRowIndices = new Set();
-let lastCheckedIndex = null;
+function cancelMoveMode() {
+    isMoveMode = false;
+    moveSourceRowIndex = null;
+    document.body.classList.remove("move-target-mode");
+    renderTable(); 
+}
 
-function updateDuplicateHighlights() {
-  const tbody = document.getElementById("main-table").querySelector("tbody");
-  if (!tbody) return;
+async function executeMove(sourceIdx, targetIdx) {
+    if (!confirm("선택한 날짜로 이동하시겠습니까?")) return;
 
-  // 1. Count occurrences
-  const counts = {};
-  planRows.forEach((row, index) => {
-    const outlineNo = (row[COL_OUTLINE_NO] || "").toString().trim();
-    if (outlineNo) {
-      if (!counts[outlineNo]) counts[outlineNo] = [];
-      counts[outlineNo].push(index);
-    }
-  });
-
-  // 2. Identify duplicate indices
-  const duplicateIndices = new Set();
-  Object.keys(counts).forEach(key => {
-    if (counts[key].length > 1) {
-      counts[key].forEach(idx => duplicateIndices.add(idx));
-    }
-  });
-
-  // 3. Apply classes
-  const trs = tbody.querySelectorAll("tr");
-  trs.forEach(tr => {
-    const rowIndex = parseInt(tr.dataset.rowIndex, 10);
-    // Find the Outline No cell (COL_OUTLINE_NO)
-    // If isAdmin, the first column is checkbox, so we shift by 1
-    const domIndex = COL_OUTLINE_NO + (isAdmin ? 1 : 0);
-    const targetCell = tr.children[domIndex];
-    if (targetCell) {
-        if (duplicateIndices.has(rowIndex)) {
-            targetCell.classList.add("duplicate-highlight");
-        } else {
-            targetCell.classList.remove("duplicate-highlight");
+    setLoadingText("loading-text", "이동 처리 중...");
+    
+    try {
+        const sourceRow = planRows[sourceIdx];
+        const targetRow = planRows[targetIdx];
+        
+        const newTargetRow = [...targetRow];
+        for (let i = 1; i < planHeader.length; i++) { 
+             newTargetRow[i] = sourceRow[i];
         }
+        newTargetRow._originalIndex = targetRow._originalIndex;
+        
+        const newSourceRow = [...sourceRow];
+        for (let i = 1; i < planHeader.length; i++) {
+             newSourceRow[i] = "";
+        }
+        newSourceRow._originalIndex = sourceRow._originalIndex;
+        
+        planRows[targetIdx] = newTargetRow;
+        planRows[sourceIdx] = newSourceRow;
+        
+        const updates = [
+            {
+                rowNumber: String(PLAN_DATA_START_ROW + (newTargetRow._originalIndex !== undefined ? newTargetRow._originalIndex : targetIdx)),
+                values: newTargetRow
+            },
+            {
+                rowNumber: String(PLAN_DATA_START_ROW + (newSourceRow._originalIndex !== undefined ? newSourceRow._originalIndex : sourceIdx)),
+                values: newSourceRow
+            }
+        ];
+        
+        await updateSheetRows(updates);
+        
+        isMoveMode = false;
+        moveSourceRowIndex = null;
+        document.body.classList.remove("move-target-mode");
+        renderTable();
+        setLoadingText("loading-text", "");
+        
+    } catch (err) {
+        console.error(err);
+        alert("이동 실패: " + err.message);
+        setLoadingText("loading-text", "");
+        loadPlanData(true);
     }
-  });
 }
 
 function renderTable() {
@@ -331,22 +225,16 @@ function renderTable() {
     return;
   }
   
-  // Clear loading text when data is rendered
   setLoadingText("loading-text", "");
+  lastCheckedIndex = null;
 
-  lastCheckedIndex = null; // Reset shift-click pivot
-
-  // Prepare filter criteria
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const oneYearLater = new Date(today);
-  oneYearLater.setFullYear(today.getFullYear() + 1);
 
   // Header
   const headerRow = document.createElement("tr");
   
   if (isAdmin) {
-      // Checkbox Header
       const thCheck = document.createElement("th");
       thCheck.className = "cell-center col-checkbox";
       const chkAll = document.createElement("input");
@@ -354,15 +242,13 @@ function renderTable() {
       chkAll.onclick = (e) => {
           const checkboxes = document.querySelectorAll(".row-checkbox");
           if (chkAll.checked) {
-              checkboxes.forEach(chk => {
-                  chk.checked = true;
-                  const ridx = parseInt(chk.dataset.rowIndex, 10);
-                  selectedRowIndices.add(ridx);
+              selectedRowIndices.clear();
+              checkboxes.forEach(cb => {
+                  cb.checked = true;
+                  selectedRowIndices.add(parseInt(cb.dataset.rowIndex));
               });
           } else {
-              checkboxes.forEach(chk => {
-                  chk.checked = false;
-              });
+              checkboxes.forEach(cb => cb.checked = false);
               selectedRowIndices.clear();
           }
           updateBulkActionVisibility();
@@ -371,33 +257,47 @@ function renderTable() {
       headerRow.appendChild(thCheck);
   }
 
-  planHeader.forEach((colName, index) => {
-    const th = document.createElement("th");
-    th.textContent = colName || "";
-    th.className = `cell-center col-${index}`;
-    headerRow.appendChild(th);
-  });
-  if (isAdmin) {
+  planHeader.forEach((h, i) => {
       const th = document.createElement("th");
-      th.textContent = "관리";
-      th.className = "cell-center col-action";
+      th.textContent = h;
+      th.className = `cell-center col-${i}`;
       headerRow.appendChild(th);
+  });
+
+  if (isAdmin) {
+      const thAction = document.createElement("th");
+      thAction.textContent = "관리";
+      thAction.className = "cell-center col-action";
+      headerRow.appendChild(thAction);
   }
   thead.appendChild(headerRow);
 
+  // Body
   let previousMonthKey = null;
+
   planRows.forEach((row, rowIndex) => {
-    // Filter Logic
-    const dateValue = row[COL_DATE] || "";
-    const d = parseDateString(dateValue);
+     const d = parseDateString(row[COL_DATE]);
+     if (d && d < today) return; // Filter past dates
 
-    if (!d) return; // Hide rows with invalid dates
-    if (d < today) return; // Hide past dates
-    if (!isAdmin && d > oneYearLater) return; // Hide far future dates for non-admins
+     const tr = document.createElement("tr");
+     if (isMoveMode && rowIndex === moveSourceRowIndex) {
+         tr.classList.add("move-source-row");
+     }
 
-    const tr = document.createElement("tr");
-    
-    // Checkbox Cell
+     tr.onclick = async (e) => {
+        if (!isMoveMode) return;
+        if (e.target.tagName === 'INPUT' || e.target.closest('button')) return;
+        
+        e.stopPropagation();
+        
+        if (rowIndex === moveSourceRowIndex) {
+            cancelMoveMode();
+            return;
+        }
+        
+        await executeMove(moveSourceRowIndex, rowIndex);
+    };
+
      if (isAdmin) {
          const tdCheck = document.createElement("td");
          tdCheck.className = "cell-center col-checkbox";
@@ -405,58 +305,36 @@ function renderTable() {
          chk.type = "checkbox";
          chk.className = "row-checkbox";
          chk.dataset.rowIndex = rowIndex;
-         if (selectedRowIndices.has(rowIndex)) {
-             chk.checked = true;
-         }
+         if (selectedRowIndices.has(rowIndex)) chk.checked = true;
+         
          chk.onclick = (e) => {
+             e.stopPropagation();
              const isChecked = chk.checked;
              
              if (e.shiftKey && lastCheckedIndex !== null) {
-                 // Note: rowIndex and lastCheckedIndex are indices in planRows (fullRows).
-                 // They might be far apart if rows are hidden.
-                 // We should select all *visible* rows between them.
-                 // But simply iterating range is easiest, checking visibility logic if needed.
-                 // Or, since we only render visible rows, we can rely on DOM order?
-                 // But we need to update selectedRowIndices which uses planRows index.
-                 // Let's iterate planRows range and check visibility criteria.
-                 
                  const start = Math.min(lastCheckedIndex, rowIndex);
                  const end = Math.max(lastCheckedIndex, rowIndex);
                  
                  for (let i = start; i <= end; i++) {
-                     // Check visibility
                      const r = planRows[i];
                      const rd = parseDateString(r[COL_DATE]);
                      if (!rd || rd < today) continue;
                      
-                     if (isChecked) {
-                         selectedRowIndices.add(i);
-                     } else {
-                         selectedRowIndices.delete(i);
-                     }
+                     if (isChecked) selectedRowIndices.add(i);
+                     else selectedRowIndices.delete(i);
                  }
                  
-                 // Update UI
                  const checkboxes = document.querySelectorAll(".row-checkbox");
                  checkboxes.forEach(cb => {
                      const rIdx = parseInt(cb.dataset.rowIndex, 10);
                      if (rIdx >= start && rIdx <= end) {
-                         if (selectedRowIndices.has(rIdx)) {
-                            cb.checked = true;
-                         } else {
-                            cb.checked = false;
-                         }
+                         cb.checked = isChecked;
                      }
                  });
-
              } else {
-                 if (isChecked) {
-                     selectedRowIndices.add(rowIndex);
-                 } else {
-                     selectedRowIndices.delete(rowIndex);
-                 }
+                 if (isChecked) selectedRowIndices.add(rowIndex);
+                 else selectedRowIndices.delete(rowIndex);
              }
-             
              lastCheckedIndex = rowIndex;
              updateBulkActionVisibility();
          };
@@ -464,8 +342,6 @@ function renderTable() {
          tr.appendChild(tdCheck);
      }
  
-     // const dateValue = row[COL_DATE] || ""; // Already defined above
-     // const d = parseDateString(dateValue); // Already defined above
      let currentMonthKey = null;
      if (d) {
        currentMonthKey = `${d.getFullYear()}-${d.getMonth() + 1}`;
@@ -477,7 +353,6 @@ function renderTable() {
        previousMonthKey = currentMonthKey;
      }
  
-     // Assign rowIndex to dataset for easy DOM access
      tr.dataset.rowIndex = rowIndex;
  
      planHeader.forEach((_, colIndex) => {
@@ -485,29 +360,21 @@ function renderTable() {
        td.className = `cell-center col-${colIndex}`;
        
        let value = row[colIndex] || "";
-      let displayValue = value;
-      if (colIndex === COL_DATE) {
+       let displayValue = value;
+       if (colIndex === COL_DATE) {
         displayValue = formatDateDisplay(value);
-      }
+       }
       
       td.textContent = displayValue;
 
       if (isAdmin) {
           td.classList.add("editable-cell");
-          
-          // Click to Edit Logic
           td.addEventListener("click", () => {
-            if (td.querySelector("input")) return; // Already editing
+            if (td.querySelector("input")) return;
+            if (isMoveMode) return; // Disable edit in move mode
 
-            // Use planRows[rowIndex] to get the latest data, 
-            // because 'row' in the closure might be stale if the row was updated (e.g. cleared) without re-rendering.
             const currentRowData = planRows[rowIndex] || [];
             const originalValue = currentRowData[colIndex] || "";
-            // Capture original topic value if we are editing outline number
-            let originalTopicValue = "";
-            if (colIndex === COL_OUTLINE_NO) {
-                originalTopicValue = currentRowData[COL_TOPIC] || "";
-            }
             
             const input = document.createElement("input");
             input.type = colIndex === COL_DATE ? "date" : "text";
@@ -527,213 +394,101 @@ function renderTable() {
               input.value = originalValue;
             }
 
-            // Auto-fill Inviter with admin name if empty
-            if (colIndex === COL_INVITER && !input.value.trim()) {
-                input.value = adminName || "";
-            }
+            input.onblur = async () => {
+                const newValue = input.value;
+                if (newValue === originalValue && colIndex !== COL_DATE) {
+                    td.textContent = displayValue;
+                    return;
+                }
+                
+                let finalValue = newValue;
+                if (colIndex === COL_DATE) {
+                     const dObj = new Date(newValue);
+                     if (!isNaN(dObj.getTime())) {
+                         const y = dObj.getFullYear();
+                         const m = String(dObj.getMonth() + 1).padStart(2, "0");
+                         const day = String(dObj.getDate()).padStart(2, "0");
+                         finalValue = `${y}/${m}/${day}`;
+                     }
+                }
 
-            // Outline Number Auto-lookup Logic
-            if (colIndex === COL_OUTLINE_NO) {
-                input.addEventListener("input", async () => {
-                    const val = input.value.trim();
-                    if (!val) return;
-                    
-                    const topic = await getOutlineTopic(val);
-                    if (topic) {
+                if (finalValue === originalValue) {
+                    td.textContent = displayValue;
+                    return;
+                }
+
+                td.textContent = colIndex === COL_DATE ? formatDateDisplay(finalValue) : finalValue;
+                
+                if (!planRows[rowIndex]) planRows[rowIndex] = [];
+                planRows[rowIndex][colIndex] = finalValue;
+
+                if (colIndex === COL_OUTLINE_NO) {
+                    if (outlineCache && Object.prototype.hasOwnProperty.call(outlineCache, finalValue)) {
+                        const topic = outlineCache[finalValue] || "";
                         updateTopicCell(rowIndex, topic, tr);
                     }
-                });
-            }
+                    updateOutlineDuplicateHighlights();
+                }
+
+                const originalIdx = planRows[rowIndex]._originalIndex !== undefined ? planRows[rowIndex]._originalIndex : rowIndex;
+                const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
+                
+                try {
+                    await updateSheetRow(sheetRowNumber, planRows[rowIndex]);
+                } catch(e) {
+                    console.error(e);
+                    alert("수정 실패: " + e.message);
+                    td.textContent = displayValue;
+                }
+            };
+
+            input.onkeydown = (e) => {
+                if (e.key === "Enter") {
+                    input.blur();
+                }
+            };
 
             td.textContent = "";
             td.appendChild(input);
             input.focus();
-
-            const save = async () => {
-                let newValue = input.value;
-                
-                // If it's a date field, ensure YYYY/MM/DD format for consistency
-                // This format is recognized by Google Sheets as a date, allowing Sheet formatting to apply
-                if (colIndex === COL_DATE && newValue) {
-                    // input[type="date"] returns YYYY-MM-DD
-                    const parts = newValue.split("-");
-                    if (parts.length === 3) {
-                        const yyyy = parts[0];
-                        const mm = parts[1];
-                        const dd = parts[2];
-                        newValue = `${yyyy}/${mm}/${dd}`;
-                    }
-                }
-
-                // Check for duplicate Outline No
-                if (colIndex === COL_OUTLINE_NO && newValue.trim()) {
-                    const duplicates = [];
-                    const newValStr = newValue.trim();
-                    planRows.forEach((r, idx) => {
-                        const rVal = (r[COL_OUTLINE_NO] || "").toString().trim();
-                        if (idx !== rowIndex && rVal === newValStr) {
-                            duplicates.push({ index: idx, date: r[COL_DATE] });
-                        }
-                    });
-
-                    if (duplicates.length > 0) {
-                        // Check for 6-month restriction
-                        const currentRowDateVal = planRows[rowIndex][COL_DATE];
-                        const currentRowDate = parseDateString(currentRowDateVal);
-                        
-                        let isBlocked = false;
-                        const conflictDates = [];
-                        
-                        duplicates.forEach(d => {
-                             const dupDate = parseDateString(d.date);
-                             if (currentRowDate && dupDate) {
-                                 const diffTime = Math.abs(currentRowDate - dupDate);
-                                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                 if (diffDays < SIX_MONTH_DAYS) {
-                                     isBlocked = true;
-                                 }
-                             }
-                             conflictDates.push(formatDateDisplay(d.date));
-                        });
-
-                        const dateStrings = conflictDates.join(", ");
-
-                        if (isBlocked) {
-                            alert(
-                                `경고: 6개월 이내에 이미 사용된 골자번호입니다.\n사용된 날짜: ${dateStrings}\n\n입력이 취소됩니다.`
-                            );
-                            // Revert visual
-                            td.textContent = displayValue;
-                            input.value = originalValue; // Restore input value just in case
-                            
-                            // Revert topic if we changed it (Optimistic update in input listener)
-                            if (colIndex === COL_OUTLINE_NO) {
-                                if (!planRows[rowIndex]) planRows[rowIndex] = [];
-                                planRows[rowIndex][COL_TOPIC] = originalTopicValue;
-                                // Revert Topic Cell visually
-                                const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
-                                const topicCell = tr.children[domIndex];
-                                if (topicCell) {
-                                    topicCell.textContent = originalTopicValue;
-                                }
-                            }
-                            return; // Stop saving
-                        } else {
-                            const confirmed = confirm(
-                                `경고: 이미 사용된 골자번호입니다.\n사용된 날짜: ${dateStrings}\n\n그래도 입력하시겠습니까?`
-                            );
-                            if (!confirmed) {
-                                // Revert visual
-                                td.textContent = displayValue;
-                                input.value = originalValue;
-                                
-                                // Revert topic if we changed it
-                                if (colIndex === COL_OUTLINE_NO) {
-                                    if (!planRows[rowIndex]) planRows[rowIndex] = [];
-                                    planRows[rowIndex][COL_TOPIC] = originalTopicValue;
-                                    // Revert Topic Cell visually
-                                    const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
-                                    const topicCell = tr.children[domIndex];
-                                    if (topicCell) {
-                                        topicCell.textContent = originalTopicValue;
-                                    }
-                                }
-                                return; // Stop saving
-                            }
-                        }
-                    }
-
-                    // Force fetch topic again to ensure it's up to date before saving
-                    // This handles the race condition where input event started fetch but blur happened before it finished
-                    try {
-                        const topic = await getOutlineTopic(newValue.trim());
-                        if (topic) {
-                            updateTopicCell(rowIndex, topic, tr);
-                        }
-                    } catch (e) {
-                        console.error("Topic fetch failed during save", e);
-                    }
-                }
-
-                // Optimistic update
-                if (!planRows[rowIndex]) planRows[rowIndex] = [];
-                planRows[rowIndex][colIndex] = newValue;
-
-                // Ensure Date column is always formatted as YYYY/MM/DD before saving
-                // This prevents ISO strings (from JSON Date objects) from being sent back to the sheet
-                const currentDateVal = planRows[rowIndex][COL_DATE];
-                if (currentDateVal) {
-                    const dObj = parseDateString(currentDateVal);
-                    if (dObj) {
-                        const yyyy = dObj.getFullYear();
-                        const mm = String(dObj.getMonth() + 1).padStart(2, "0");
-                        const dd = String(dObj.getDate()).padStart(2, "0");
-                        planRows[rowIndex][COL_DATE] = `${yyyy}/${mm}/${dd}`;
-                    }
-                }
-
-                // Update highlights after data change
-                updateDuplicateHighlights();
-
-                let newDisplayValue = newValue;
-                if (colIndex === COL_DATE) {
-                    newDisplayValue = formatDateDisplay(newValue);
-                }
-                td.textContent = newDisplayValue;
-
-                try {
-                    const currentRow = planRows[rowIndex];
-                    const originalIdx = currentRow._originalIndex !== undefined ? currentRow._originalIndex : rowIndex;
-                    const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
-                    await updateSheetRow(sheetRowNumber, currentRow);
-                    // Success visual
-                    td.style.backgroundColor = "#d4edda";
-                    setTimeout(() => td.style.backgroundColor = "", 1000);
-                } catch (err) {
-                    console.error(err);
-                    alert("저장 실패: " + err.message);
-                    td.textContent = displayValue; // Revert
-                    planRows[rowIndex][colIndex] = originalValue; // Revert data
-                }
-            };
-
-            const cancel = () => {
-                input.removeEventListener("blur", handleBlur); // Cleanup
-                td.textContent = displayValue;
-            };
-
-            const handleBlur = () => {
-                save();
-            };
-
-            input.addEventListener("blur", handleBlur);
-            input.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") {
-                    input.blur();
-                } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancel();
-                }
-            });
           });
-      } else {
-          // Read-only logic specific (if any)
-          // Currently just textContent is enough
       }
-
       tr.appendChild(td);
     });
 
     if (isAdmin) {
         const tdAction = document.createElement("td");
         tdAction.className = "cell-center col-action";
+        
+        // Move Button
+        const btnMove = document.createElement("button");
+        btnMove.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 4H14.5a.5.5 0 0 0 .5-.5z"/>
+</svg>`;
+        btnMove.title = "내용 이동";
+        btnMove.className = "button-move icon-button-small";
+        btnMove.onclick = (e) => {
+            e.stopPropagation();
+            if (isMoveMode && moveSourceRowIndex === rowIndex) {
+                cancelMoveMode();
+            } else {
+                isMoveMode = true;
+                moveSourceRowIndex = rowIndex;
+                document.body.classList.add("move-target-mode");
+                renderTable(); // Re-render to show highlights
+                alert("이동할 대상 날짜(행)를 클릭하세요.");
+            }
+        };
+        tdAction.appendChild(btnMove);
+
+        // Delete Button
         const btnDelete = document.createElement("button");
         btnDelete.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
   <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
   <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
 </svg>`;
         btnDelete.title = "내용 삭제";
-        btnDelete.className = "button-danger-small icon-button";
+        btnDelete.className = "button-danger-small icon-button-small";
         btnDelete.onclick = async (e) => {
             e.stopPropagation();
             if (!confirm("정말로 이 행의 내용을 삭제하시겠습니까?\n(날짜는 유지되고 나머지 항목만 삭제됩니다)")) {
@@ -753,22 +508,27 @@ function renderTable() {
             const newRowData = new Array(planHeader.length).fill("");
             newRowData[COL_DATE] = formattedDate;
             
-            // Capture original index from the old row before overwriting
             const oldRow = planRows[rowIndex];
             const originalIdx = oldRow._originalIndex !== undefined ? oldRow._originalIndex : rowIndex;
             newRowData._originalIndex = originalIdx;
 
             planRows[rowIndex] = newRowData;
             
+            // Visual Update
+            const offset = isAdmin ? 1 : 0;
+            const domIndexDate = COL_DATE + offset;
+            const domIndexAction = tr.children.length - 1;
+
             Array.from(tr.children).forEach((cell, idx) => {
-                if (idx === COL_DATE || idx >= planHeader.length) return;
+                if (isAdmin && idx === 0) return;
+                if (idx === domIndexDate) return;
+                if (idx === domIndexAction) return;
                 cell.textContent = "";
             });
 
             try {
                 const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
                 await updateSheetRow(sheetRowNumber, newRowData);
-                updateDuplicateHighlights();
             } catch (err) {
                 console.error(err);
                 alert("삭제 실패: " + err.message);
@@ -781,9 +541,7 @@ function renderTable() {
 
     tbody.appendChild(tr);
   });
-
-  updateDuplicateHighlights();
-  setLoadingText("loading-text", "");
+  updateOutlineDuplicateHighlights();
 }
 
 function updateBulkActionVisibility() {
@@ -798,7 +556,6 @@ function updateBulkActionVisibility() {
 }
 
 async function processPlanDataResponse(data) {
-    // Update Title if available
     if (data && data.sheetTitle) {
       const titleEl = document.querySelector(".app-title");
       if (titleEl) {
@@ -817,12 +574,10 @@ async function processPlanDataResponse(data) {
     planHeader = header;
     let fullRows = rows;
     
-    // Attach original index to each row to preserve mapping to Google Sheet rows
     fullRows.forEach((row, i) => {
       row._originalIndex = i;
     });
 
-    // Sort rows by date (Ascending)
     fullRows.sort((a, b) => {
       const da = parseDateString(a[COL_DATE]);
       const db = parseDateString(b[COL_DATE]);
@@ -832,9 +587,9 @@ async function processPlanDataResponse(data) {
       return da - db;
     });
 
-    // 1. Auto-generate missing dates (Admin Only)
+    planRows = fullRows;
+
     if (isAdmin) {
-        // Init bulk delete button logic
         const bulkBtn = document.getElementById("bulk-delete-btn");
         if (bulkBtn) {
             bulkBtn.onclick = async () => {
@@ -847,19 +602,14 @@ async function processPlanDataResponse(data) {
                 setLoadingText("loading-text", "일괄 삭제 처리 중...");
                 
                 const updates = [];
-                // Sort indices to process in order (though server handles it, good for debugging)
                 const indices = Array.from(selectedRowIndices).sort((a, b) => a - b);
                 
-                // Prepare updates
                 indices.forEach(idx => {
                     const currentRow = planRows[idx];
-                    
-                    // Determine the actual row number in the Google Sheet
                     const originalIdx = currentRow._originalIndex !== undefined ? currentRow._originalIndex : idx;
                     const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
 
                     const currentDate = currentRow[COL_DATE];
-                    
                     let formattedDate = currentDate;
                     const dObj = parseDateString(currentDate);
                     if (dObj) {
@@ -872,9 +622,7 @@ async function processPlanDataResponse(data) {
                     const newRowData = new Array(planHeader.length).fill("");
                     newRowData[COL_DATE] = formattedDate;
                     
-                    // Update local state
                     planRows[idx] = newRowData;
-                    // Restore _originalIndex to the new row object so future updates still work
                     planRows[idx]._originalIndex = originalIdx;
                     
                     updates.push({
@@ -887,7 +635,7 @@ async function processPlanDataResponse(data) {
                     await updateSheetRows(updates);
                     selectedRowIndices.clear();
                     updateBulkActionVisibility();
-                    renderTable(); // Re-render to reflect changes
+                    renderTable();
                     setLoadingText("loading-text", "");
                 } catch (err) {
                     console.error(err);
@@ -896,242 +644,134 @@ async function processPlanDataResponse(data) {
                 }
             };
         }
-
-        let lastDate = null;
-        // Find the last valid date in the existing data
-        for (let i = fullRows.length - 1; i >= 0; i--) {
-            const d = parseDateString(fullRows[i][COL_DATE]);
-            if (d) {
-                lastDate = d;
-                break;
-            }
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // If no data, start from next Sunday relative to today
-        if (!lastDate) {
-            lastDate = new Date(today);
-            lastDate.setDate(lastDate.getDate() + (7 - lastDate.getDay()) % 7);
-            if (lastDate <= today) {
-                lastDate.setDate(lastDate.getDate() + 7);
-            }
-            // Backtrack one week so the loop below starts correctly
-            lastDate.setDate(lastDate.getDate() - 7); 
-        }
-
-        const targetDate = new Date(today);
-        targetDate.setFullYear(today.getFullYear() + 2);
-
-        const newRowsToAdd = [];
-        let nextDate = new Date(lastDate);
-        
-        // Ensure we start from the NEXT Sunday strictly after lastDate
-        nextDate.setDate(nextDate.getDate() + (7 - nextDate.getDay()) % 7);
-        if (nextDate <= lastDate) {
-            nextDate.setDate(nextDate.getDate() + 7);
-        }
-
-        // Keep track of the original length to assign correct indices to new rows
-        let nextSheetIndex = rows.length;
-
-        // Generate dates until targetDate (2 years from now)
-        let safetyCount = 0;
-        while (safetyCount < 120) {
-            if (nextDate > targetDate) break;
-
-            const colCount = header.length > 0 ? header.length : 10;
-            const newRow = new Array(colCount).fill("");
-            
-            const y = nextDate.getFullYear();
-            const m = String(nextDate.getMonth() + 1).padStart(2, "0");
-            const d = String(nextDate.getDate()).padStart(2, "0");
-            // Use 'YYYY/MM/DD' format for Google Sheets compatibility (parsed as Date)
-            newRow[COL_DATE] = `${y}/${m}/${d}`;
-            
-            // Assign original index for the new row
-            newRow._originalIndex = nextSheetIndex++;
-
-            newRowsToAdd.push(newRow);
-            
-            // Advance to next Sunday
-            nextDate.setDate(nextDate.getDate() + 7);
-            safetyCount++;
-        }
-
-        if (newRowsToAdd.length > 0) {
-            setLoadingText("loading-text", `새로운 날짜 ${newRowsToAdd.length}개를 생성 중입니다... (잠시만 기다려주세요)`);
-            // Append rows sequentially
-            for (const row of newRowsToAdd) {
-                try {
-                    // We append only the values, not the _originalIndex property (JSON.stringify handles that)
-                    await appendSheetValues(null, [row]);
-                } catch (e) {
-                    console.error("Row creation failed", e);
-                }
-            }
-            // Update local data
-            fullRows = fullRows.concat(newRowsToAdd);
-        }
     }
-
-    // 2. Filter logic is now moved to renderTable to preserve row indices
-    planRows = fullRows;
+    
     renderTable();
-    setLoadingText("loading-text", "");
 }
 
-async function loadPermissionAndDecideRole() {
-  try {
-    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
-    if (!userEmail) {
-      setAuthStatus("로그인 이메일을 확인할 수 없습니다.", true);
-      return;
-    }
-    
-    setLoadingText("loading-text", "데이터를 불러오는 중입니다...");
+async function loadPlanData(forceRefresh = false) {
+    setLoadingText("loading-text", "데이터 불러오는 중...");
+    try {
+        const email = googleUserEmail || "";
+        const response = await callAppsScript("initData", { email });
+        
+        const perm = response.permission || {};
+        isAdmin = !!perm.isAdmin;
+        isSuperAdmin = !!perm.isSuperAdmin;
+        adminName = perm.userName || "";
+        
+        if (isAdmin) {
+             document.body.classList.add("admin-mode");
+             document.body.classList.add("is-admin");
+        } else {
+             document.body.classList.remove("admin-mode");
+             document.body.classList.remove("is-admin");
+        }
 
-    // Combined request: Permission + Plan + Outline
-    const data = await callAppsScript({
-      action: "initData",
-      email: userEmail,
-    });
-    
-    // 1. Permission
-    const permData = data.permission;
-    isAdmin = !!(permData && permData.isAdmin);
-    isSuperAdmin = !!(permData && permData.isSuperAdmin);
-    adminName = (permData && permData.userName) ? permData.userName : "";
-    const roleLabelRaw = permData && permData.roleLabel ? permData.roleLabel : "";
-    let roleLabel = roleLabelRaw;
-    if (!roleLabel) {
-        roleLabel = isAdmin ? "관리자" : "일반 사용자 (읽기 전용)";
+        const outlineResponse = response.outline || {};
+        outlineCache = outlineResponse.outline || {};
+        isOutlineCacheLoaded = true;
+        
+        processPlanDataResponse(response.plan || {});
+    } catch (err) {
+        console.error(err);
+        setLoadingText("loading-text", "데이터 로드 실패: " + err.message);
     }
-    setAuthStatus(`${googleUserEmail} (${roleLabel})`, false);
-
-    // Toggle Admin Mode Class
-    if (isAdmin) {
-        document.body.classList.add("admin-mode");
-    } else {
-        document.body.classList.remove("admin-mode");
-    }
-    
-    const logoutButtonEl = document.getElementById("logout-button");
-    const gsiContainerEl = document.getElementById("gsi-button-container");
-    if (gsiContainerEl) {
-      gsiContainerEl.style.display = "none";
-    }
-    if (logoutButtonEl) {
-      logoutButtonEl.style.display = "inline-block";
-    }
-
-    // 2. Outline Cache
-    if (data.outline && data.outline.outline) {
-        outlineCache = data.outline.outline;
-    } else {
-        outlineCache = {};
-    }
-    isOutlineCacheLoaded = true;
-
-    // 3. Plan Data
-    await processPlanDataResponse(data.plan);
-
-  } catch (error) {
-    console.error(error);
-    setAuthStatus(`권한 확인 중 오류: ${error.message}`, true);
-    setLoadingText("loading-text", "");
-  }
 }
 
-async function loadPlanData(forAdmin) {
-  try {
-    setLoadingText("loading-text", "계획표를 불러오는 중입니다...");
+function decodeJwt(token) {
+    try {
+        const payloadPart = token.split(".")[1];
+        const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+        const padLen = base64.length % 4;
+        const padded = padLen ? base64 + "=".repeat(4 - padLen) : base64;
+        const binary = atob(padded);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        let jsonStr;
+        if (typeof TextDecoder !== "undefined") {
+            jsonStr = new TextDecoder("utf-8").decode(bytes);
+        } else {
+            jsonStr = decodeURIComponent(escape(binary));
+        }
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        return null;
+    }
+}
 
-    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
-    const data = await callAppsScript({
-      action: "getPlanData",
-      forAdmin: forAdmin && isAdmin ? "true" : "false",
-      email: userEmail,
-    });
+function handleCredentialResponse(response) {
+    const responsePayload = decodeJwt(response.credential);
+    if (!responsePayload) return;
     
-    await processPlanDataResponse(data);
-  } catch (error) {
-    console.error(error);
-    setLoadingText("loading-text", `계획표 불러오기 오류: ${error.message}`);
-  }
-}
-
-function initGoogleIdentity() {
-  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-    setAuthStatus("Google Identity 스크립트를 불러오지 못했습니다.", true);
-    return;
-  }
-
-  window.google.accounts.id.initialize({
-    client_id: CLIENT_ID,
-    callback: (response) => {
-      const payload = decodeJwt(response.credential);
-      if (payload && payload.email) {
-        googleUserEmail = payload.email;
-      } else {
-        googleUserEmail = null;
-        setAuthStatus("로그인 이메일을 확인할 수 없습니다.", true);
-        return;
-      }
-      loadPermissionAndDecideRole();
-    },
-  });
-
-  window.google.accounts.id.renderButton(
-    document.getElementById("gsi-button-container"),
-    {
-      type: "icon",
-      theme: "outline",
-      size: "medium",
-      shape: "circle",
-    }
-  );
-}
-
-function initLogout() {
-  const logoutButton = document.getElementById("logout-button");
-  logoutButton.addEventListener("click", () => {
-    googleUserEmail = null;
-    isAdmin = false;
-    isSuperAdmin = false;
-    adminName = "";
-    document.body.classList.remove("admin-mode");
-    planHeader = [];
-    planRows = [];
-    document.getElementById("main-table").querySelector("thead").innerHTML = "";
-    document.getElementById("main-table").querySelector("tbody").innerHTML = "";
-    document.body.classList.remove("admin-mode");
-    // setAdminSectionVisible(false); // Removed
-    setAuthStatus("로그아웃되었습니다.", false);
-    document.getElementById("logout-button").style.display = "none";
+    googleUserEmail = responsePayload.email;
+    const name = responsePayload.name;
     
-    const gsiContainerEl = document.getElementById("gsi-button-container");
-    if (gsiContainerEl) {
-      gsiContainerEl.style.display = "inline-block";
+    const authStatus = document.querySelector(".auth-status");
+    if (authStatus) {
+        authStatus.textContent = `${name} (${googleUserEmail})`;
+        authStatus.style.display = "block";
     }
-    // Reload public data (read-only)
-    loadPlanData(false);
-  });
+    
+    const gsiContainer = document.getElementById("gsi-button-container");
+    const logoutBtn = document.getElementById("logout-button");
+    if (gsiContainer) {
+        gsiContainer.style.display = "none";
+    }
+    if (logoutBtn) {
+        logoutBtn.style.display = "inline-flex";
+    }
+    
+    loadPlanData();
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  initLogout();
-  loadPlanData(false);
-  const checkInterval = setInterval(() => {
-    if (window.google && window.google.accounts && window.google.accounts.id) {
-      clearInterval(checkInterval);
-      initGoogleIdentity();
+window.onload = function() {
+    if (window.google) {
+        google.accounts.id.initialize({
+            client_id: CLIENT_ID,
+            callback: handleCredentialResponse
+        });
+        google.accounts.id.renderButton(
+            document.getElementById("gsi-button-container"),
+            {
+                type: "icon",
+                shape: "circle",
+                theme: "outline",
+                size: "large"
+            }
+        );
     }
-  }, 100);
-  setTimeout(() => {
-    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-      setAuthStatus("Google 스크립트 로드 지연 중입니다. 새로고침 해보세요.", true);
+    
+    const logoutBtn = document.getElementById("logout-button");
+    if (logoutBtn) {
+        logoutBtn.onclick = () => {
+            googleUserEmail = null;
+            
+            const authStatus = document.querySelector(".auth-status");
+            if (authStatus) {
+                authStatus.textContent = "";
+                authStatus.style.display = "none";
+            }
+            
+            const gsiContainer = document.getElementById("gsi-button-container");
+            if (gsiContainer) {
+                gsiContainer.style.display = "block";
+            }
+            
+            logoutBtn.style.display = "none";
+            
+            try {
+                if (window.google && google.accounts && google.accounts.id) {
+                    google.accounts.id.revoke(googleUserEmail || "", () => {});
+                }
+            } catch (e) {
+            }
+            
+            loadPlanData();
+        };
     }
-  }, 8000);
-});
+    loadPlanData();
+};
