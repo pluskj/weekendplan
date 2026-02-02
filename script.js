@@ -319,6 +319,10 @@ function renderTable() {
   }
 
   planHeader.forEach((h, i) => {
+      // 일반 사용자: 6열(회중 연락처), 7열(연사 연락처) 숨김
+      if (!isAdmin && (i === COL_CONGREGATION_CONTACT || i === COL_SPEAKER_CONTACT)) {
+          return;
+      }
       const th = document.createElement("th");
       th.textContent = h;
       th.className = `cell-center col-${i}`;
@@ -415,19 +419,23 @@ function renderTable() {
        previousMonthKey = currentMonthKey;
      }
  
-     tr.dataset.rowIndex = rowIndex;
+    tr.dataset.rowIndex = rowIndex;
  
-     planHeader.forEach((_, colIndex) => {
-       const td = document.createElement("td");
-       td.className = `cell-center col-${colIndex}`;
-       
-       let value = row[colIndex] || "";
-       let displayValue = value;
-       if (colIndex === COL_DATE) {
-        displayValue = formatDateDisplay(value);
-       }
+    planHeader.forEach((_, colIndex) => {
+      // 일반 사용자: 6열(회중 연락처), 7열(연사 연락처) 숨김
+      if (!isAdmin && (colIndex === COL_CONGREGATION_CONTACT || colIndex === COL_SPEAKER_CONTACT)) {
+          return;
+      }
+      const td = document.createElement("td");
+      td.className = `cell-center col-${colIndex}`;
       
-      td.textContent = displayValue;
+      let value = row[colIndex] || "";
+      let displayValue = value;
+      if (colIndex === COL_DATE) {
+       displayValue = formatDateDisplay(value);
+      }
+     
+     td.textContent = displayValue;
 
       if (isAdmin) {
           td.classList.add("editable-cell");
