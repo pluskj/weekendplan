@@ -25,6 +25,7 @@ let adminName = "";
 let planHeader = [];
 let planRows = [];
 let outlineCache = {};
+let isOutlineCacheLoaded = false;
 const SIX_MONTH_DAYS = 180;
 
 function ensureAppsScriptUrl() {
@@ -105,6 +106,7 @@ async function loadOutlineCache() {
   });
   const mapping = data && data.outline ? data.outline : {};
   outlineCache = mapping;
+  isOutlineCacheLoaded = true;
 }
 
 async function getOutlineTopic(no) {
@@ -112,7 +114,7 @@ async function getOutlineTopic(no) {
   if (!trimmed) {
     return "";
   }
-  if (!outlineCache || Object.keys(outlineCache).length === 0) {
+  if (!isOutlineCacheLoaded) {
     await loadOutlineCache();
   }
   return outlineCache[trimmed] || "";
@@ -802,61 +804,7 @@ function updateBulkActionVisibility() {
     }
 }
 
-async function loadPermissionAndDecideRole() {
-  try {
-    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
-    if (!userEmail) {
-      setAuthStatus("로그인 이메일을 확인할 수 없습니다.", true);
-      return;
-    }
-    const data = await callAppsScript({
-      action: "checkPermission",
-      email: userEmail,
-    });
-    isAdmin = !!(data && data.isAdmin);
-    isSuperAdmin = !!(data && data.isSuperAdmin);
-    adminName = (data && data.userName) ? data.userName : "";
-    const roleLabelRaw = data && data.roleLabel ? data.roleLabel : "";
-    let roleLabel = roleLabelRaw;
-    if (!roleLabel) {
-      if (isAdmin) {
-        roleLabel = "관리자";
-      } else {
-        roleLabel = "일반 사용자";
-      }
-    }
-    if (isAdmin || isSuperAdmin) {
-      setAuthStatus(`${googleUserEmail} (${roleLabel})`, false);
-    } else {
-      setAuthStatus(`${googleUserEmail} (${roleLabel})`, false);
-    }
-    const logoutButtonEl = document.getElementById("logout-button");
-    const gsiContainerEl = document.getElementById("gsi-button-container");
-    if (gsiContainerEl) {
-      gsiContainerEl.style.display = "none";
-    }
-    if (logoutButtonEl) {
-      logoutButtonEl.style.display = "inline-block";
-    }
-    
-    await loadPlanData(true);
-    // setAdminSectionVisible(isAdmin); // Removed
-  } catch (error) {
-    console.error(error);
-    setAuthStatus(`권한 확인 중 오류: ${error.message}`, true);
-  }
-}
-
-async function loadPlanData(forAdmin) {
-  try {
-    setLoadingText("loading-text", "계획표를 불러오는 중입니다...");
-
-    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
-    const data = await callAppsScript({
-      action: "getPlanData",
-      forAdmin: forAdmin && isAdmin ? "true" : "false",
-      email: userEmail,
-    });
+async function processPlanDataResponse(data) {
     // Update Title if available
     if (data && data.sheetTitle) {
       const titleEl = document.querySelector(".app-title");
@@ -877,18 +825,16 @@ async function loadPlanData(forAdmin) {
     let fullRows = rows;
     
     // Attach original index to each row to preserve mapping to Google Sheet rows
-    // This is crucial because we will sort the rows for display, but updates must target the original row number.
     fullRows.forEach((row, i) => {
       row._originalIndex = i;
     });
 
     // Sort rows by date (Ascending)
-    // This ensures the table is always chronological and month separators work correctly.
     fullRows.sort((a, b) => {
       const da = parseDateString(a[COL_DATE]);
       const db = parseDateString(b[COL_DATE]);
       if (!da && !db) return 0;
-      if (!da) return 1; // Invalid dates go to bottom
+      if (!da) return 1; 
       if (!db) return -1;
       return da - db;
     });
@@ -916,7 +862,6 @@ async function loadPlanData(forAdmin) {
                     const currentRow = planRows[idx];
                     
                     // Determine the actual row number in the Google Sheet
-                    // Use _originalIndex if available, otherwise fallback to current index (should not happen if logic is correct)
                     const originalIdx = currentRow._originalIndex !== undefined ? currentRow._originalIndex : idx;
                     const sheetRowNumber = PLAN_DATA_START_ROW + originalIdx;
 
@@ -961,7 +906,6 @@ async function loadPlanData(forAdmin) {
 
         let lastDate = null;
         // Find the last valid date in the existing data
-        // Since fullRows is sorted, we can just check from the end
         for (let i = fullRows.length - 1; i >= 0; i--) {
             const d = parseDateString(fullRows[i][COL_DATE]);
             if (d) {
@@ -991,23 +935,15 @@ async function loadPlanData(forAdmin) {
         let nextDate = new Date(lastDate);
         
         // Ensure we start from the NEXT Sunday strictly after lastDate
-        // (If lastDate is already Sunday, we want the next one. If it's Tuesday, we want the coming Sunday)
         nextDate.setDate(nextDate.getDate() + (7 - nextDate.getDay()) % 7);
         if (nextDate <= lastDate) {
             nextDate.setDate(nextDate.getDate() + 7);
         }
 
         // Keep track of the original length to assign correct indices to new rows
-        // Note: fullRows here is the SORTED array of existing rows.
-        // But we need the physical count of rows in the sheet to append correctly?
-        // Yes, if we append, the new row will be at index `rows.length` (0-based).
-        // Wait, `rows` (from server) length is the physical count.
-        // `fullRows` is just a reference to it, sorted.
-        // So `rows.length` is the next index.
         let nextSheetIndex = rows.length;
 
         // Generate dates until targetDate (2 years from now)
-        // Limit to 105 weeks (approx 2 years) to prevent infinite loops
         let safetyCount = 0;
         while (safetyCount < 120) {
             if (nextDate > targetDate) break;
@@ -1051,6 +987,75 @@ async function loadPlanData(forAdmin) {
     planRows = fullRows;
     renderTable();
     setLoadingText("loading-text", "");
+}
+
+async function loadPermissionAndDecideRole() {
+  try {
+    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
+    if (!userEmail) {
+      setAuthStatus("로그인 이메일을 확인할 수 없습니다.", true);
+      return;
+    }
+    
+    setLoadingText("loading-text", "데이터를 불러오는 중입니다...");
+
+    // Combined request: Permission + Plan + Outline
+    const data = await callAppsScript({
+      action: "initData",
+      email: userEmail,
+    });
+    
+    // 1. Permission
+    const permData = data.permission;
+    isAdmin = !!(permData && permData.isAdmin);
+    isSuperAdmin = !!(permData && permData.isSuperAdmin);
+    adminName = (permData && permData.userName) ? permData.userName : "";
+    const roleLabelRaw = permData && permData.roleLabel ? permData.roleLabel : "";
+    let roleLabel = roleLabelRaw;
+    if (!roleLabel) {
+        roleLabel = isAdmin ? "관리자" : "일반 사용자";
+    }
+    setAuthStatus(`${googleUserEmail} (${roleLabel})`, false);
+    
+    const logoutButtonEl = document.getElementById("logout-button");
+    const gsiContainerEl = document.getElementById("gsi-button-container");
+    if (gsiContainerEl) {
+      gsiContainerEl.style.display = "none";
+    }
+    if (logoutButtonEl) {
+      logoutButtonEl.style.display = "inline-block";
+    }
+
+    // 2. Outline Cache
+    if (data.outline && data.outline.outline) {
+        outlineCache = data.outline.outline;
+    } else {
+        outlineCache = {};
+    }
+    isOutlineCacheLoaded = true;
+
+    // 3. Plan Data
+    await processPlanDataResponse(data.plan);
+
+  } catch (error) {
+    console.error(error);
+    setAuthStatus(`권한 확인 중 오류: ${error.message}`, true);
+    setLoadingText("loading-text", "");
+  }
+}
+
+async function loadPlanData(forAdmin) {
+  try {
+    setLoadingText("loading-text", "계획표를 불러오는 중입니다...");
+
+    const userEmail = (googleUserEmail || "").toString().trim().toLowerCase();
+    const data = await callAppsScript({
+      action: "getPlanData",
+      forAdmin: forAdmin && isAdmin ? "true" : "false",
+      email: userEmail,
+    });
+    
+    await processPlanDataResponse(data);
   } catch (error) {
     console.error(error);
     setLoadingText("loading-text", `계획표 불러오기 오류: ${error.message}`);
