@@ -34,6 +34,7 @@ body {
 
 .top-bar-row-main {
   flex: 1;
+  justify-content: center;
 }
 
 .top-bar-row-sub {
@@ -318,8 +319,8 @@ body {
 }
 
 .icon-button {
-  width: 42px;
-  height: 42px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -330,7 +331,7 @@ body {
   border-radius: 50%; /* Circle */
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .icon-button:hover {
