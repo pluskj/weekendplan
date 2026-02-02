@@ -435,6 +435,7 @@ function renderTable() {
                 
                 try {
                     await updateSheetRow(sheetRowNumber, planRows[rowIndex]);
+                    displayValue = td.textContent;
                 } catch(e) {
                     console.error(e);
                     alert("수정 실패: " + e.message);
