@@ -170,6 +170,17 @@ body {
   color: #1e293b; /* Slate 800 */
 }
 
+.editable-cell {
+  cursor: pointer;
+}
+
+.editable-cell:hover {
+  background-color: #f8fafc; /* Lighter than row hover */
+  box-shadow: inset 0 0 0 2px #4f46e5; /* Focus ring indication */
+  position: relative;
+  z-index: 1;
+}
+
 /* Column Widths */
 .col-0 { min-width: 90px; white-space: nowrap; text-align: center; font-weight: 500; color: #4f46e5; } /* Date */
 .col-1 { min-width: 60px; white-space: nowrap; text-align: center; } /* Outline No */
@@ -186,14 +197,14 @@ body {
   position: sticky;
   z-index: 10;
   background-color: inherit; /* Inherit from TR */
-  border-right: 2px solid #e2e8f0 !important; /* Stronger separator for sticky cols */
+  border-right: 2px solid #64748b !important; /* Stronger separator for sticky cols */
 }
 
 .data-table thead th.col-checkbox,
 .data-table thead th.col-0 {
   z-index: 30;
   background-color: #f1f5f9;
-  border-right: 2px solid #e2e8f0 !important;
+  border-right: 2px solid #64748b !important;
 }
 
 .col-checkbox { left: 0; width: 40px; text-align: center; }
@@ -305,6 +316,19 @@ body {
   padding: 3rem;
   color: #64748b;
   font-size: 1.1rem;
+}
+
+/* Admin Mode Visuals */
+.admin-mode .app-title::after {
+  content: " (관리자 모드)";
+  font-size: 0.5em;
+  vertical-align: middle;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 /* Responsive */

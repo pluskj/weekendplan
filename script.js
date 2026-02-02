@@ -1098,6 +1098,7 @@ function initLogout() {
     planRows = [];
     document.getElementById("main-table").querySelector("thead").innerHTML = "";
     document.getElementById("main-table").querySelector("tbody").innerHTML = "";
+    document.body.classList.remove("admin-mode");
     // setAdminSectionVisible(false); // Removed
     setAuthStatus("로그아웃되었습니다.", false);
     document.getElementById("logout-button").style.display = "none";
