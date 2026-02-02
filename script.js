@@ -28,6 +28,21 @@ let outlineCache = {};
 let isOutlineCacheLoaded = false;
 const SIX_MONTH_DAYS = 180;
 
+function updateTopicCell(rowIndex, topicValue, tr) {
+    // 1. Update internal data
+    if (!planRows[rowIndex]) planRows[rowIndex] = [];
+    planRows[rowIndex][COL_TOPIC] = topicValue;
+
+    // 2. Update visual
+    if (tr) {
+        const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
+        const topicCell = tr.children[domIndex];
+        if (topicCell) {
+            topicCell.textContent = topicValue;
+        }
+    }
+}
+
 function ensureAppsScriptUrl() {
   if (!APPS_SCRIPT_URL) {
     throw new Error("Apps Script URL이 설정되지 않았습니다.");
@@ -84,6 +99,7 @@ function setLoadingText(targetId, text) {
   if (el) {
     if (!text) {
         el.innerHTML = "";
+        el.style.display = "none";
         return;
     }
     
@@ -524,21 +540,7 @@ function renderTable() {
                     
                     const topic = await getOutlineTopic(val);
                     if (topic) {
-                        // Find the topic cell in the same row
-                        // Note: If isAdmin, there is an extra checkbox column at index 0
-                        const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
-                        const topicCell = tr.children[domIndex];
-                        
-                        if (topicCell) {
-                            // Update visually
-                            topicCell.textContent = topic;
-                            // Update internal data (Optimistic)
-                            if (!planRows[rowIndex]) planRows[rowIndex] = [];
-                            planRows[rowIndex][COL_TOPIC] = topic;
-                            
-                            // Note: We DO NOT save to sheet here anymore to avoid race conditions 
-                            // and to ensure validation (duplicate check) in save() is respected.
-                        }
+                        updateTopicCell(rowIndex, topic, tr);
                     }
                 });
             }
@@ -646,16 +648,7 @@ function renderTable() {
                     try {
                         const topic = await getOutlineTopic(newValue.trim());
                         if (topic) {
-                            if (!planRows[rowIndex]) planRows[rowIndex] = [];
-                            planRows[rowIndex][COL_TOPIC] = topic;
-                            
-                            // Update Topic Cell visually if it exists
-                            // Note: isAdmin check for index offset
-                            const domIndex = COL_TOPIC + (isAdmin ? 1 : 0);
-                            const topicCell = tr.children[domIndex];
-                            if (topicCell) {
-                                topicCell.textContent = topic;
-                            }
+                            updateTopicCell(rowIndex, topic, tr);
                         }
                     } catch (e) {
                         console.error("Topic fetch failed during save", e);
