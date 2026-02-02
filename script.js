@@ -154,9 +154,25 @@ function hideGlobalLoading() {
 
 function parseDateString(dateStr) {
     if (!dateStr) return null;
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return d;
+    if (dateStr instanceof Date) {
+        const d0 = new Date(dateStr.getTime());
+        if (isNaN(d0.getTime())) return null;
+        return d0;
+    }
+    const str = String(dateStr).trim();
+    if (!str) return null;
+    const dotMatch = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
+    if (dotMatch) {
+        const y = parseInt(dotMatch[1], 10);
+        const m = parseInt(dotMatch[2], 10) - 1;
+        const d = parseInt(dotMatch[3], 10);
+        const result = new Date(y, m, d);
+        if (!isNaN(result.getTime())) return result;
+    }
+    const normalized = str.replace(/년|월|일/g, "").replace(/[.]/g, "/").replace(/\s+/g, "");
+    const d2 = new Date(normalized);
+    if (isNaN(d2.getTime())) return null;
+    return d2;
 }
 
 function formatDateDisplay(dateStr) {
@@ -446,7 +462,7 @@ function renderTable() {
                          const y = dObj.getFullYear();
                          const m = String(dObj.getMonth() + 1).padStart(2, "0");
                          const day = String(dObj.getDate()).padStart(2, "0");
-                         finalValue = `${y}/${m}/${day}`;
+                         finalValue = `${y}. ${m}. ${day}`;
                      }
                 }
 
@@ -553,7 +569,7 @@ function renderTable() {
                 const y = dObj.getFullYear();
                 const m = String(dObj.getMonth() + 1).padStart(2, "0");
                 const day = String(dObj.getDate()).padStart(2, "0");
-                formattedDate = `${y}/${m}/${day}`;
+                formattedDate = `${y}. ${m}. ${day}`;
             }
 
             const newRowData = new Array(planHeader.length).fill("");
@@ -667,7 +683,7 @@ async function processPlanDataResponse(data) {
                         const y = dObj.getFullYear();
                         const m = String(dObj.getMonth() + 1).padStart(2, "0");
                         const day = String(dObj.getDate()).padStart(2, "0");
-                        formattedDate = `${y}/${m}/${day}`;
+                        formattedDate = `${y}. ${m}. ${day}`;
                     }
 
                     const newRowData = new Array(planHeader.length).fill("");
