@@ -70,6 +70,28 @@ function updateOutlineDuplicateHighlights() {
     });
 }
 
+function hasOutlineDuplicateWithinSixMonths(rowIndex, outlineValue) {
+    const baseRow = planRows[rowIndex] || [];
+    const baseDate = parseDateString(baseRow[COL_DATE]);
+    if (!baseDate) return false;
+    const target = String(outlineValue || "").trim();
+    if (!target) return false;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    for (let i = 0; i < planRows.length; i++) {
+        if (i === rowIndex) continue;
+        const row = planRows[i] || [];
+        const value = String(row[COL_OUTLINE_NO] || "").trim();
+        if (!value || value !== target) continue;
+        const d = parseDateString(row[COL_DATE]);
+        if (!d) continue;
+        const diffDays = Math.abs((d.getTime() - baseDate.getTime()) / oneDayMs);
+        if (diffDays <= SIX_MONTH_DAYS) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function updateTopicCell(rowIndex, topicValue, tr) {
     // 1. Update internal data
     if (!planRows[rowIndex]) planRows[rowIndex] = [];
@@ -417,6 +439,18 @@ function renderTable() {
                     return;
                 }
 
+                if (colIndex === COL_OUTLINE_NO) {
+                    const normalized = String(finalValue || "").trim();
+                    if (normalized) {
+                        if (hasOutlineDuplicateWithinSixMonths(rowIndex, normalized)) {
+                            alert("최근 6개월 이내에 동일한 골자 번호가 이미 사용되었습니다.");
+                            td.textContent = displayValue;
+                            input.value = originalValue;
+                            return;
+                        }
+                    }
+                }
+
                 td.textContent = colIndex === COL_DATE ? formatDateDisplay(finalValue) : finalValue;
                 
                 if (!planRows[rowIndex]) planRows[rowIndex] = [];
@@ -652,6 +686,7 @@ async function processPlanDataResponse(data) {
 
 async function loadPlanData(forceRefresh = false) {
     setLoadingText("loading-text", "데이터 불러오는 중...");
+    setLoadingText("loading-indicator", "화면 준비 중...");
     try {
         const email = googleUserEmail || "";
         const response = await callAppsScript("initData", { email });
@@ -674,9 +709,11 @@ async function loadPlanData(forceRefresh = false) {
         isOutlineCacheLoaded = true;
         
         processPlanDataResponse(response.plan || {});
+        setLoadingText("loading-indicator", "");
     } catch (err) {
         console.error(err);
         setLoadingText("loading-text", "데이터 로드 실패: " + err.message);
+        setLoadingText("loading-indicator", "");
     }
 }
 
