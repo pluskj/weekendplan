@@ -52,11 +52,16 @@ body {
 
 .app-title::before {
   content: "";
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+  background-color: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
   background-image: url("https://cdn-icons-png.flaticon.com/512/2693/2693507.png");
-  background-size: contain;
+  background-size: 70%;
   background-repeat: no-repeat;
+  background-position: center;
 }
 
 .auth-area {

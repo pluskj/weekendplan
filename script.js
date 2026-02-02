@@ -826,7 +826,7 @@ window.onload = function() {
                 type: "icon",
                 shape: "circle",
                 theme: "outline",
-                size: "large"
+                size: "medium"
             }
         );
     }
