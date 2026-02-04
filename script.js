@@ -281,10 +281,64 @@ async function handleDateCellLongPress(rowIndex) {
         alert("날짜가 없는 행에는 행을 추가할 수 없습니다.");
         return;
     }
-    const input = prompt("어떤 작업을 할까요?\n1: 위에 1행 추가\n2: 아래에 1행 추가\n3: 이 날짜 행 삭제");
-    if (!input) return;
-    const trimmed = String(input).trim();
-    if (trimmed === "3") {
+    let overlay = document.getElementById("row-action-overlay");
+    if (overlay) {
+        overlay.remove();
+    }
+    overlay = document.createElement("div");
+    overlay.id = "row-action-overlay";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.backgroundColor = "rgba(15, 23, 42, 0.45)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "200";
+    const dialog = document.createElement("div");
+    dialog.style.backgroundColor = "white";
+    dialog.style.padding = "1rem 1.25rem";
+    dialog.style.borderRadius = "0.75rem";
+    dialog.style.boxShadow = "0 10px 15px rgba(15, 23, 42, 0.25)";
+    dialog.style.minWidth = "220px";
+    dialog.style.maxWidth = "90%";
+    const title = document.createElement("div");
+    title.textContent = "행 작업 선택";
+    title.style.fontWeight = "600";
+    title.style.marginBottom = "0.75rem";
+    const btnContainer = document.createElement("div");
+    btnContainer.style.display = "flex";
+    btnContainer.style.flexDirection = "column";
+    btnContainer.style.gap = "0.5rem";
+    function closeOverlay() {
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+    }
+    async function handleInsert(position) {
+        const deltaDays = position === "before" ? -7 : 7;
+        const newDate = new Date(baseDate.getTime() + deltaDays * 24 * 60 * 60 * 1000);
+        const y = newDate.getFullYear();
+        const m = String(newDate.getMonth() + 1).padStart(2, "0");
+        const d = String(newDate.getDate()).padStart(2, "0");
+        const formattedDate = `${y}. ${m}. ${d}`;
+        const newRowData = new Array(planHeader.length).fill("");
+        newRowData[COL_DATE] = formattedDate;
+        const originalIdx = row._originalIndex !== undefined ? row._originalIndex : rowIndex;
+        const baseRowNumber = PLAN_DATA_START_ROW + originalIdx;
+        try {
+            await callAppsScript("insertRow", {
+                email: googleUserEmail,
+                baseRowNumber: String(baseRowNumber),
+                position,
+                values: JSON.stringify(newRowData)
+            });
+            await loadPlanData(true);
+        } catch (err) {
+            console.error(err);
+            alert("행 추가에 실패했습니다: " + err.message);
+        }
+    }
+    async function handleDelete() {
         const originalIdxForDelete = row._originalIndex !== undefined ? row._originalIndex : rowIndex;
         const deleteRowNumber = PLAN_DATA_START_ROW + originalIdxForDelete;
         if (!confirm("정말로 이 날짜 행을 삭제하시겠습니까?")) {
@@ -300,37 +354,41 @@ async function handleDateCellLongPress(rowIndex) {
             console.error(err);
             alert("행 삭제에 실패했습니다: " + err.message);
         }
-        return;
     }
-    let position;
-    if (trimmed === "1") position = "before";
-    else if (trimmed === "2") position = "after";
-    else {
-        alert("1, 2 또는 3을 입력해 주세요.");
-        return;
+    function createActionButton(label, handler) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.className = "button";
+        b.style.width = "100%";
+        b.onclick = async (e) => {
+            e.stopPropagation();
+            closeOverlay();
+            await handler();
+        };
+        return b;
     }
-    const deltaDays = position === "before" ? -7 : 7;
-    const newDate = new Date(baseDate.getTime() + deltaDays * 24 * 60 * 60 * 1000);
-    const y = newDate.getFullYear();
-    const m = String(newDate.getMonth() + 1).padStart(2, "0");
-    const d = String(newDate.getDate()).padStart(2, "0");
-    const formattedDate = `${y}. ${m}. ${d}`;
-    const newRowData = new Array(planHeader.length).fill("");
-    newRowData[COL_DATE] = formattedDate;
-    const originalIdx = row._originalIndex !== undefined ? row._originalIndex : rowIndex;
-    const baseRowNumber = PLAN_DATA_START_ROW + originalIdx;
-    try {
-        await callAppsScript("insertRow", {
-            email: googleUserEmail,
-            baseRowNumber: String(baseRowNumber),
-            position,
-            values: JSON.stringify(newRowData)
-        });
-        await loadPlanData(true);
-    } catch (err) {
-        console.error(err);
-        alert("행 추가에 실패했습니다: " + err.message);
-    }
+    btnContainer.appendChild(createActionButton("위에 1행 추가", () => handleInsert("before")));
+    btnContainer.appendChild(createActionButton("아래에 1행 추가", () => handleInsert("after")));
+    btnContainer.appendChild(createActionButton("이 날짜 행 삭제", handleDelete));
+    const btnCancel = document.createElement("button");
+    btnCancel.textContent = "취소";
+    btnCancel.className = "button";
+    btnCancel.style.width = "100%";
+    btnCancel.style.marginTop = "0.5rem";
+    btnCancel.onclick = (e) => {
+        e.stopPropagation();
+        closeOverlay();
+    };
+    dialog.appendChild(title);
+    dialog.appendChild(btnContainer);
+    dialog.appendChild(btnCancel);
+    overlay.appendChild(dialog);
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) {
+            closeOverlay();
+        }
+    });
+    document.body.appendChild(overlay);
 }
 
 async function updateSheetRows(updates) {
@@ -764,6 +822,18 @@ function renderTable() {
             }
         };
         tdAction.appendChild(btnDelete);
+
+        if (isSuperAdmin) {
+            const btnRowMenu = document.createElement("button");
+            btnRowMenu.textContent = "+/-";
+            btnRowMenu.title = "행 추가/삭제";
+            btnRowMenu.className = "button-move icon-button-small";
+            btnRowMenu.onclick = (e) => {
+                e.stopPropagation();
+                handleDateCellLongPress(rowIndex);
+            };
+            tdAction.appendChild(btnRowMenu);
+        }
         tr.appendChild(tdAction);
     }
 
