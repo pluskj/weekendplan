@@ -161,26 +161,55 @@ function parseDateString(dateStr) {
     }
     const str = String(dateStr).trim();
     if (!str) return null;
-    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T/);
-    if (isoMatch) {
-        const y = parseInt(isoMatch[1], 10);
-        const m = parseInt(isoMatch[2], 10) - 1;
-        const d = parseInt(isoMatch[3], 10);
-        const isoDate = new Date(y, m, d);
-        if (!isNaN(isoDate.getTime())) return isoDate;
+    const ymdDash = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+    if (ymdDash) {
+        const y = parseInt(ymdDash[1], 10);
+        const m = parseInt(ymdDash[2], 10) - 1;
+        const d = parseInt(ymdDash[3], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
     }
-    const dotMatch = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
-    if (dotMatch) {
-        const y = parseInt(dotMatch[1], 10);
-        const m = parseInt(dotMatch[2], 10) - 1;
-        const d = parseInt(dotMatch[3], 10);
-        const result = new Date(y, m, d);
-        if (!isNaN(result.getTime())) return result;
+    const ymdDot = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
+    if (ymdDot) {
+        const y = parseInt(ymdDot[1], 10);
+        const m = parseInt(ymdDot[2], 10) - 1;
+        const d = parseInt(ymdDot[3], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
     }
-    const normalized = str.replace(/년|월|일/g, "").replace(/[.]/g, "/").replace(/\s+/g, "");
-    const d2 = new Date(normalized);
-    if (isNaN(d2.getTime())) return null;
-    return d2;
+    const ymdSlash = str.match(/^(\d{4})\/\s*(\d{1,2})\/\s*(\d{1,2})$/);
+    if (ymdSlash) {
+        const y = parseInt(ymdSlash[1], 10);
+        const m = parseInt(ymdSlash[2], 10) - 1;
+        const d = parseInt(ymdSlash[3], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    const ymdKorean = str.match(/^(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일$/);
+    if (ymdKorean) {
+        const y = parseInt(ymdKorean[1], 10);
+        const m = parseInt(ymdKorean[2], 10) - 1;
+        const d = parseInt(ymdKorean[3], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    const compact = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compact) {
+        const y = parseInt(compact[1], 10);
+        const m = parseInt(compact[2], 10) - 1;
+        const d = parseInt(compact[3], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    const parts = str.replace(/[^\d]/g, " ").trim().split(/\s+/);
+    if (parts.length >= 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+    return null;
 }
 
 function formatDateDisplay(dateStr) {
