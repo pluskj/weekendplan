@@ -196,7 +196,15 @@ body {
 .data-table .col-5 { min-width: 120px; white-space: normal; font-size: 0.85rem; color: #64748b; text-align: center !important; } /* Contact (Congregation) */
 .data-table .col-6 { min-width: 100px; white-space: nowrap; font-size: 0.85rem; color: #64748b; text-align: center !important; } /* Speaker Contact */
 .col-7 { min-width: 80px; white-space: nowrap; text-align: center; } /* Inviter */
-.col-action { min-width: 80px; white-space: nowrap; text-align: center; } /* Admin Action */
+.col-action {
+  min-width: 80px;
+  white-space: nowrap;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+} /* Admin Action */
 .data-table .col-8 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Host */
 .data-table .col-9 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Reader */
 .data-table .col-10 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Prayer */

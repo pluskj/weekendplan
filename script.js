@@ -767,7 +767,18 @@ function renderTable() {
         };
         tdAction.appendChild(btnMove);
 
-        // Delete Button
+        const btnAdd = document.createElement("button");
+        btnAdd.textContent = "+/-";
+        btnAdd.title = "행 추가/삭제";
+        btnAdd.className = "button-move icon-button-small";
+        btnAdd.onclick = (e) => {
+            e.stopPropagation();
+            handleDateCellLongPress(rowIndex);
+        };
+        if (isSuperAdmin) {
+            tdAction.appendChild(btnAdd);
+        }
+
         const btnDelete = document.createElement("button");
         btnDelete.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
   <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
@@ -822,18 +833,6 @@ function renderTable() {
             }
         };
         tdAction.appendChild(btnDelete);
-
-        if (isSuperAdmin) {
-            const btnRowMenu = document.createElement("button");
-            btnRowMenu.textContent = "+/-";
-            btnRowMenu.title = "행 추가/삭제";
-            btnRowMenu.className = "button-move icon-button-small";
-            btnRowMenu.onclick = (e) => {
-                e.stopPropagation();
-                handleDateCellLongPress(rowIndex);
-            };
-            tdAction.appendChild(btnRowMenu);
-        }
         tr.appendChild(tdAction);
     }
 
