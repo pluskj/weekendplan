@@ -200,11 +200,13 @@ body {
   min-width: 80px;
   white-space: nowrap;
   text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+  vertical-align: middle;
 } /* Admin Action */
+
+.col-action button {
+  vertical-align: middle;
+  margin: 0 2px;
+}
 .data-table .col-8 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Host */
 .data-table .col-9 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Reader */
 .data-table .col-10 { min-width: 80px; white-space: nowrap; text-align: center !important; } /* Prayer */
