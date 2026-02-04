@@ -281,14 +281,32 @@ async function handleDateCellLongPress(rowIndex) {
         alert("날짜가 없는 행에는 행을 추가할 수 없습니다.");
         return;
     }
-    const input = prompt("어디에 1행을 추가할까요?\n1: 위에 1행 추가\n2: 아래에 1행 추가");
+    const input = prompt("어떤 작업을 할까요?\n1: 위에 1행 추가\n2: 아래에 1행 추가\n3: 이 날짜 행 삭제");
     if (!input) return;
     const trimmed = String(input).trim();
+    if (trimmed === "3") {
+        const originalIdxForDelete = row._originalIndex !== undefined ? row._originalIndex : rowIndex;
+        const deleteRowNumber = PLAN_DATA_START_ROW + originalIdxForDelete;
+        if (!confirm("정말로 이 날짜 행을 삭제하시겠습니까?")) {
+            return;
+        }
+        try {
+            await callAppsScript("deleteRow", {
+                email: googleUserEmail,
+                rowNumber: String(deleteRowNumber)
+            });
+            await loadPlanData(true);
+        } catch (err) {
+            console.error(err);
+            alert("행 삭제에 실패했습니다: " + err.message);
+        }
+        return;
+    }
     let position;
     if (trimmed === "1") position = "before";
     else if (trimmed === "2") position = "after";
     else {
-        alert("1 또는 2를 입력해 주세요.");
+        alert("1, 2 또는 3을 입력해 주세요.");
         return;
     }
     const deltaDays = position === "before" ? -7 : 7;
