@@ -1045,6 +1045,13 @@ window.onload = function() {
         );
     }
     
+    const refreshBtn = document.getElementById("refresh-button");
+    if (refreshBtn) {
+        refreshBtn.onclick = () => {
+            window.location.reload();
+        };
+    }
+    
     const logoutBtn = document.getElementById("logout-button");
     if (logoutBtn) {
         logoutBtn.onclick = () => {
