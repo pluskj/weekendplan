@@ -33,6 +33,20 @@ let isMoveMode = false;
 let moveSourceRowIndex = null;
 const selectedRowIndices = new Set();
 let lastCheckedIndex = null;
+let dateCellLongPressTimer = null;
+const DATE_LONG_PRESS_MS = 600;
+
+function canEditCell(colIndex) {
+    if (!isAdmin) return false;
+    if (isSuperAdmin) return true;
+    if (colIndex === COL_OUTLINE_NO) return true;
+    if (colIndex === COL_SPEAKER) return true;
+    if (colIndex === COL_CONGREGATION) return true;
+    if (colIndex === COL_CONGREGATION_CONTACT) return true;
+    if (colIndex === COL_SPEAKER_CONTACT) return true;
+    if (colIndex === COL_INVITER) return true;
+    return false;
+}
 
 function updateOutlineDuplicateHighlights() {
     const table = document.getElementById("main-table");
@@ -224,6 +238,81 @@ function formatDateDisplay(dateStr) {
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
     return `${yy}/${mm}/${dd}`;
+}
+
+function clearDateLongPressTimer() {
+    if (dateCellLongPressTimer) {
+        clearTimeout(dateCellLongPressTimer);
+        dateCellLongPressTimer = null;
+    }
+}
+
+function attachDateCellLongPress(td, rowIndex) {
+    if (!isSuperAdmin) return;
+    const start = () => {
+        clearDateLongPressTimer();
+        dateCellLongPressTimer = setTimeout(() => {
+            dateCellLongPressTimer = null;
+            handleDateCellLongPress(rowIndex);
+        }, DATE_LONG_PRESS_MS);
+    };
+    const cancel = () => {
+        clearDateLongPressTimer();
+    };
+    td.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        start();
+    });
+    td.addEventListener("touchstart", () => {
+        start();
+    });
+    td.addEventListener("mouseup", cancel);
+    td.addEventListener("mouseleave", cancel);
+    td.addEventListener("touchend", cancel);
+    td.addEventListener("touchcancel", cancel);
+}
+
+async function handleDateCellLongPress(rowIndex) {
+    if (!isSuperAdmin) return;
+    const row = planRows[rowIndex];
+    if (!row) return;
+    const baseDate = parseDateString(row[COL_DATE]);
+    if (!baseDate) {
+        alert("날짜가 없는 행에는 행을 추가할 수 없습니다.");
+        return;
+    }
+    const input = prompt("어디에 1행을 추가할까요?\n1: 위에 1행 추가\n2: 아래에 1행 추가");
+    if (!input) return;
+    const trimmed = String(input).trim();
+    let position;
+    if (trimmed === "1") position = "before";
+    else if (trimmed === "2") position = "after";
+    else {
+        alert("1 또는 2를 입력해 주세요.");
+        return;
+    }
+    const deltaDays = position === "before" ? -7 : 7;
+    const newDate = new Date(baseDate.getTime() + deltaDays * 24 * 60 * 60 * 1000);
+    const y = newDate.getFullYear();
+    const m = String(newDate.getMonth() + 1).padStart(2, "0");
+    const d = String(newDate.getDate()).padStart(2, "0");
+    const formattedDate = `${y}. ${m}. ${d}`;
+    const newRowData = new Array(planHeader.length).fill("");
+    newRowData[COL_DATE] = formattedDate;
+    const originalIdx = row._originalIndex !== undefined ? row._originalIndex : rowIndex;
+    const baseRowNumber = PLAN_DATA_START_ROW + originalIdx;
+    try {
+        await callAppsScript("insertRow", {
+            email: googleUserEmail,
+            baseRowNumber: String(baseRowNumber),
+            position,
+            values: JSON.stringify(newRowData)
+        });
+        await loadPlanData(true);
+    } catch (err) {
+        console.error(err);
+        alert("행 추가에 실패했습니다: " + err.message);
+    }
 }
 
 async function updateSheetRows(updates) {
@@ -470,7 +559,12 @@ function renderTable() {
      
      td.textContent = displayValue;
 
-      if (isAdmin) {
+      if (colIndex === COL_DATE && isSuperAdmin) {
+          attachDateCellLongPress(td, rowIndex);
+      }
+
+      const editable = canEditCell(colIndex);
+      if (editable) {
           td.classList.add("editable-cell");
           td.addEventListener("click", () => {
             if (td.querySelector("input")) return;
