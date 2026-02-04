@@ -367,9 +367,9 @@ async function handleDateCellLongPress(rowIndex) {
         };
         return b;
     }
-    btnContainer.appendChild(createActionButton("위에 1행 추가", () => handleInsert("before")));
-    btnContainer.appendChild(createActionButton("아래에 1행 추가", () => handleInsert("after")));
-    btnContainer.appendChild(createActionButton("이 날짜 행 삭제", handleDelete));
+    btnContainer.appendChild(createActionButton("수어", () => handleInsert("before")));
+    btnContainer.appendChild(createActionButton("남부", () => handleInsert("after")));
+    btnContainer.appendChild(createActionButton("공강", handleDelete));
     const btnCancel = document.createElement("button");
     btnCancel.textContent = "취소";
     btnCancel.className = "button";

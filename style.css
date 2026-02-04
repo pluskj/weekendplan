@@ -337,9 +337,9 @@ body {
 }
 
 .icon-button {
-  width: auto;
-  height: auto;
-  padding: 2px 4px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
